@@ -1,0 +1,155 @@
+<!--cct-->
+# Rules
+
+## Principles
+DRY/KISS/YAGNI/SSOT. Read code first, no guess. Search before add. Min scope. Verify lint+typecheck+tests. Fail→change approach. Ask before destructive. Never commit secrets. `AskUserQuestion` clarify.
+
+## Implementation Flow — MANDATORY, IN ORDER
+Every impl task. Skip step → STOP, restart from skipped.
+
+1. **Index** — `index_status`. Unindexed? `index_repository`. Indexed? `detect_changes`.
+2. **Skill gate** — invoke every matching skill FIRST (stack rules `## Skill gates`; auto-match too). Multi-skill → invoke each.
+3. **Clarify** — ambiguous? `AskUserQuestion`. No guess.
+4. **Explore** — CBM: `get_architecture` → `search_graph` → `get_code_snippet`. Never grep→read→grep.
+5. **Plan** — non-trivial? `EnterPlanMode`. State approach + files + trade-offs.
+6. **Delegate?** — match MANDATORY criteria (`## Subagents`)? Spawn subagent self-contained prompt. Subagent run §1–10 self. Parallel cap 3. Inline only if 1-file edit / single grep / known path.
+7. **Ripple** — changed symbol → `trace_path` inbound ALL call sites. Update every.
+8. **TDD** — red → min code → green → refactor. Happy+fail+edge.
+9. **Verify** — lint + typecheck + tests PASS. Fail → fix root cause, no skip.
+10. **Advisor** — big task → `advisor()` before done.
+
+Subagents inherit nothing auto. Your `.md` must declare `skills:` frontmatter + reference flow.
+
+## Skill gates
+Pattern: file from stack X touched → invoke skill X FIRST. No skip.
+
+Setup per stack:
+1. Create `~/.claude/rules/<stack>.md` (optional `paths:` frontmatter scopes by glob)
+2. First body line after frontmatter: `Invoke <skill-name> FIRST`
+3. Numbered self-check below — footguns Claude trip on
+
+Empty `rules/` → no-op, general behaviour applies. Template: `rules/README.md`. Add rules as codebase grow.
+
+## Ripple check — NON-NEGOTIABLE
+Edit one site, miss others → break. Any add/change/remove: grep symbol + CBM `trace_path` ALL usages. Update every call site. Linter miss loose types/`dynamic`/`any`/optional. Never trust "only used here".
+
+## TDD
+Red/green/refactor. Tests first. Happy+fail+edge. Edges: empty/null/boundary/concurrency/tz/unicode/overflow/permission/network/partial. Red → min code → green → refactor.
+
+## Tools
+CBM + context-mode.
+
+### Session start (MANDATORY)
+`index_status` → unindexed? `index_repository`. Indexed? `detect_changes`. Before code work.
+
+### Code → CBM graph, never grep→read→grep
+`search_graph`/`search_code` find. `trace_path` connect. `get_architecture` structure. `get_code_snippet` read. `query_graph` Cypher. Fallback `Grep`/`Glob`/`Read` only if unindexed.
+
+### Shell/run/read → context-mode sandbox
+`ctx_batch_execute` >1 cmd or >20 lines. `ctx_execute` run code. `ctx_execute_file` big file. `ctx_fetch_and_index` URL (not `WebFetch`). `ctx_search` follow-up + recall. `ctx_index` store later. No `|tail`/`|head`.
+
+### Files
+`Read`+`Edit`/`Write`. Read before Edit. No `ctx_execute` for writes.
+
+### Banned Bash
+`cat`/`head`/`tail`/`grep`/`find`.
+
+### Quickref
+| Want | Tool |
+|---|---|
+| Find def | `search_graph` |
+| A→B flow | `trace_path` |
+| Arch | `get_architecture` |
+| Read snippet | `get_code_snippet` |
+| Run cmd | `ctx_execute` / `ctx_batch_execute` |
+| Read log/big file | `ctx_execute_file` |
+| Fetch URL | `ctx_fetch_and_index` → `ctx_search` |
+| Recall prior | `ctx_search` |
+
+## Subagents
+Delegate default. Main = coordinator.
+- **MANDATORY delegate**: online research (tvly/ctx_fetch_and_index), refactor >2 files, summarize >1 file, audit, explore unknown repo, multi-file impact, big log triage.
+- **Skip**: 1-file read, 1-grep, single-known-path edit. Inline.
+- **Parallel cap**: 3 concurrent. Serial if dependent.
+- **Type**: `general-purpose` (edits), `Plan` (read-only arch), `Explore` (read-only nav).
+- **Prompt**: self-contained, <500 tok. Goal + context + constraint + return format.
+- **Return**: "report <200 words".
+- **Model**: default sonnet via env. Override `model: claude-opus-5` for refactor/audit/multi-file impact/edge-case-hunter/staff-engineer.
+- Big task → advisor after.
+
+## Writing
+Active voice. Concrete. No puffery (robust/seamless/leverage/delve/pivotal/groundbreaking/multifaceted/foster/tapestry). Mermaid when diagram > prose.
+
+## Replies
+Min tokens. Answer first. Bullets > prose. No filler/preamble/recap/summary. No status narration between tools.
+
+## Context hygiene
+Post-`/compact`: re-discover tools via `ToolSearch`. Long task: checkpoint to auto-memory.
+
+## Per-project
+Project `CLAUDE.md` overrides. Read `CLAUDE.md`/`architecture.md`/`/docs` before cross-cutting.
+
+# Codebase Knowledge Graph (codebase-memory-mcp)
+
+Project use codebase-memory-mcp for codebase knowledge graph.
+ALWAYS prefer MCP graph tools over grep/glob/file-search for code discovery.
+
+## Priority Order
+1. `search_graph` — find functions, classes, routes, variables by pattern
+2. `trace_path` — trace caller/callee
+3. `get_code_snippet` — read function/class source
+4. `query_graph` — Cypher complex patterns
+5. `get_architecture` — high-level summary
+
+## When to fall back to grep/glob
+- String literals, error messages, config values
+- Non-code files (Dockerfiles, shell scripts, configs)
+- MCP tools insufficient
+
+## Examples
+- Find handler: `search_graph(name_pattern=".*OrderHandler.*")`
+- Callers: `trace_path(function_name="OrderHandler", direction="inbound")`
+- Read source: `get_code_snippet(qualified_name="pkg/orders.OrderHandler")`
+
+## CBM transport-closed → CLI fallback
+MCP `mcp__codebase-memory-mcp__*` PRIMARY. On `Transport closed`/`MCP error -32000`/reset → retry SAME tool via CLI in `ctx_execute(shell)`. Never silent-grep. Binary `cbm` = `~/.local/bin/codebase-memory-mcp`. Envelope `{content:[{type:text,text:<json>}]}` → strip `jq -r '.content[0].text' | jq`. (`--raw` broken v0.6.0.)
+
+Pattern:
+```bash
+cbm cli <tool> '<json>' | jq -r '.content[0].text' | jq '<filter>'
+```
+
+MCP→CLI map: tool name identical, drop `mcp__codebase-memory-mcp__` prefix. All accept JSON arg `'{"project":"<name>", ...}'` match MCP schema. 14 tools: `list_projects index_status index_repository detect_changes get_architecture search_graph search_code trace_path get_code_snippet query_graph get_graph_schema delete_project manage_adr ingest_traces`.
+
+One-time: `cbm config set auto_index true` (MCP session auto-index dead when transport dead).
+
+Flow: MCP → fail-transport → CLI in `ctx_execute(shell)` → fail → surface error → grep last.
+
+# RTK - Rust Token Killer
+
+**Usage**: Token-optimized CLI proxy (60-90% savings on dev ops)
+
+## Meta Commands (always use rtk directly)
+
+```bash
+rtk gain              # Show token savings analytics
+rtk gain --history    # Show command usage history with savings
+rtk discover          # Analyze Claude Code history for missed opportunities
+rtk proxy <cmd>       # Execute raw command without filtering (for debugging)
+```
+
+## Installation Verification
+
+```bash
+rtk --version         # Should show: rtk X.Y.Z
+rtk gain              # Should work (not "command not found")
+which rtk             # Verify correct binary
+```
+
+⚠️ **Name collision**: `rtk gain` fail → maybe reachingforthejack/rtk (Rust Type Kit) installed.
+
+## Hook-Based Usage
+
+Other commands auto-rewritten by Claude Code hook.
+Example: `git status` → `rtk git status` (transparent, 0 tokens overhead)
+<!--/cct-->

@@ -1,0 +1,51 @@
+#!/usr/bin/env node
+// pw-shot: captura y texto de una página con Chromium headless (Playwright).
+// Pensado para subagentes que solo tienen Bash: no abre el navegador del usuario.
+//
+//   pw-shot <url> <salida.png> [--wait ms] [--fill "css=texto"]... [--click css]
+//           [--wait-text "texto"] [--timeout ms] [--text N] [--full]
+//
+// Imprime: título, errores de consola, y (con --text N) los primeros N chars del
+// texto visible. Guarda la captura en <salida.png>. Sale con 1 si hubo error.
+const { execSync } = require("child_process");
+module.paths.push(execSync("npm root -g").toString().trim());
+const { chromium } = require("playwright");
+
+const args = process.argv.slice(2);
+const url = args[0], out = args[1];
+if (!url || !out) { console.error("uso: pw-shot <url> <salida.png> [opciones]"); process.exit(2); }
+const opt = { wait: 2000, fills: [], clicks: [], waitText: null, timeout: 60000, text: 0, full: false };
+for (let i = 2; i < args.length; i++) {
+  const a = args[i], v = args[i + 1];
+  if (a === "--wait") opt.wait = +v, i++;
+  else if (a === "--fill") opt.fills.push(v), i++;
+  else if (a === "--click") opt.clicks.push(v), i++;
+  else if (a === "--wait-text") opt.waitText = v, i++;
+  else if (a === "--timeout") opt.timeout = +v, i++;
+  else if (a === "--text") opt.text = +v, i++;
+  else if (a === "--full") opt.full = true;
+}
+
+(async () => {
+  const browser = await chromium.launch({ headless: true });
+  const page = await browser.newPage({ viewport: { width: 1400, height: 900 } });
+  const errores = [];
+  page.on("console", (m) => { if (m.type() === "error") errores.push(m.text().slice(0, 200)); });
+  page.on("pageerror", (e) => errores.push("pageerror: " + String(e).slice(0, 200)));
+  let ok = true;
+  try {
+    await page.goto(url, { waitUntil: "load", timeout: opt.timeout });
+    await page.waitForTimeout(opt.wait);
+    for (const f of opt.fills) { const k = f.indexOf("="); await page.fill(f.slice(0, k), f.slice(k + 1)); }
+    for (const c of opt.clicks) await page.click(c);
+    if (opt.waitText) await page.getByText(opt.waitText, { exact: false }).first().waitFor({ timeout: opt.timeout });
+    else if (opt.fills.length || opt.clicks.length) await page.waitForTimeout(opt.wait);
+  } catch (e) { ok = false; errores.push("script: " + String(e.message || e).slice(0, 300)); }
+  await page.screenshot({ path: out, fullPage: opt.full });
+  console.log("titulo:", await page.title());
+  console.log("captura:", out);
+  if (opt.text) console.log("texto:\n" + (await page.evaluate(() => document.body.innerText)).replace(/\n{3,}/g, "\n\n").slice(0, opt.text));
+  console.log("errores de consola:", errores.length ? "\n  " + [...new Set(errores)].join("\n  ") : "ninguno");
+  await browser.close();
+  process.exit(ok ? 0 : 1);
+})();

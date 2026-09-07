@@ -1,0 +1,35 @@
+- [Perfil del usuario](user_profile.md) — Framework Bot para PyMEs mexicanas, español, GitHub arsavalegui
+- [Entorno de la máquina](user_machine.md) — CachyOS + Omarchy + Ajazz AK820 Pro; sudo sin TTY falla, usar pkexec
+- [Estilo de colaboración](feedback_workflow_style.md) — Pausa entre pasos, explicar antes de actuar, opciones con recomendación
+- [Confirmar destructivos](feedback_destructive_confirm.md) — Preguntar antes de borrar volúmenes, force push, rm, down -v
+- [No push sin pedir](feedback_no_push_sin_pedir.md) — Al pedir levantar/probar, no ofrecer commits ni push
+- [Estilo commits biocheck](feedback_no_coauthor_biocheck.md) — Sin co-author de Claude + mensajes en español natural, primera persona, puntuales
+- [Proyecto lemut_n8n](project_lemut_n8n.md) — Fase 1 del Framework Bot; Cloudflared quick tunnel; `./scripts/up.sh` obligatorio
+- [Proyecto huella_interop_poc](project_huella_interop_poc.md) — Módulo identidad: control asistencia, U.are.U 4500, ISO 19794-2, IMMU pendiente
+- [Proyecto biocheck](project_biocheck.md) — Repo Clee-es-com/biocheck (movido de TG-VA); monorepo apps/bio-api TS + bio_api legacy Python; alanvaldez070726 sync 2026-07-27
+- [Biocheck libfprint ctx bug](project_biocheck_libfprint_ctx.md) — FPrint.Context debe vivir mientras el device esté abierto; local var en helper → segfault del worker
+- [Biocheck sesión 2026-07-27](project_biocheck_session_20260727.md) — Fixes vivos vía docker cp (no en imagen); matcher placeholder no distingue índice izq vs índice der; pendientes al retomar
+- [Biocheck sesión 2026-07-28](project_biocheck_session_20260728.md) — Enroll multi-captura (3 templates/user) + endpoints POST /admin/users/{id}/templates y DELETE; scores mucho más estables, sin false positives cruzados
+- [Biocheck sesión 2026-08-28](project_biocheck_session_20260828.md) — Rebase sobre main + firma electrónica DVI/DAD por correo (Resend) + registro con CURP + auto-verify; huérfanos borrados, diseño Tristan manda; gotchas PUBLIC_BASE_URL/tunnel
+- [Colaboradores por proyecto](project_collaborators.md) — Noé solo participa en huella_interop_poc (no lemut ni biocheck); Tristan y Aaragon-clee-es en biocheck
+- [Framework Bot RAG](project_framework_bot_rag.md) — Pivote 2026-08-27: bot RAG con doc único; regla 2 presenta negocio; footer n8n off; gotcha reimport→re-registrar webhook
+- [Lemut Fase agenda](project_lemut_agenda.md) — Fases A-E completas; suite E2E 35/35; RAG en OmniRoute
+- [Framework Bot escala](project_framework_bot_escala.md) — Chasis+módulos; stack $0 (Oracle Free+DuckDNS+Caddy+Kuma); onboarding = bot+doc+up.sh; no sobre-abstraer antes del cliente 2
+- [POC agente FHIR](project_fhir_agent_poc.md) — Postgres jsonb (=KQL dynamic) + agente text-to-SQL LOCAL (Ollama); repo fhir-agent-poc; UI chat con selector de acceso a tablas, sin historial; funcionando E2E
+- [Abrir apps en escritorio](feedback_abrir_apps_escritorio.md) — No lanzar su navegador (rompe sesión); VS Code/terminal con setsid + movetoworkspacesilent; no tocar sus otras ventanas
+- [Subagentes globales](reference_subagentes.md) — 7 agentes en ~/.claude/agents/; yo soy orquestador central; tester/desarrollador/revisor + editor-videos/n8n/datos/investigador
+- [Repos públicos](feedback_repos_publicos.md) — Todo repo nuevo público (gh repo create --public); verificar sin secretos antes; org/compartidos no tocar sin confirmar
+- [Docs al día](feedback_docs_actualizadas.md) — Actualizar README (y Obsidian) en cada cambio importante de arquitectura, sin que lo pida
+- [Recuperar acceso n8n](project_n8n_recovery.md) — Cuando el usuario olvida creds del owner: `n8n user-management:reset` + POST /rest/owner/setup preserva workflows y credenciales
+- [Vault de Obsidian](reference_obsidian_vault.md) — ~/Notes/ con Projects/, Meetings/, Reference/; usar wikilinks [[Projects/xxx]] path completo
+- [Herramientas de voz/juntas](reference_meeting_tools.md) — Voxtype (SUPER+H dictado) y mic-meeting-recorder (auto-graba mic+sistema, transcribe, escribe nota estructurada por Claude en Obsidian)
+- [Modo bypass permisos](feedback_autonomy_bypass.md) — bypassPermissions activado global; ejecutar directo sin pedir permiso salvo destructivos reales
+- [Hablar en mexicano](feedback_mexicano_no_argentino.md) — No usar "podés", "querés", voseo argentino; español mexicano neutro
+- [Probar antes de entregar](feedback_probar_antes_de_entregar.md) — Tests E2E reales con evidencia, no "ya quedó"; en lemut usar sim_telegram.py
+- [Revisión cruzada de agentes](feedback_revision_cruzada.md) — Quien escribe código nunca lo revisa; siempre revisor/tester independiente antes de entregar
+- [Economía de tokens](feedback_token_economy.md) — Si escasea cuota: delegar a Sonnet/Haiku, avisar para /model; Ollama no me reemplaza
+- [Tooling Claude Code 2026-08-27](reference_claude_tooling.md) — claude-mem, headroom barra, task-observer, OmniRoute (serve manual), stack claude-code-tips + fixes
+- [Proyecto CIMAT Rest-Mex](project_cimat_rest_mex.md) — Diplomado CIMAT: transfer learning reseñas turísticas; repo arsavalegui/cimat-rest-mex; datos vía gdown; profe acepta retro por correo
+- [Centro de Mando](project_centro_mando.md) — Vista roster agentes siempre visible en :3002 (agent-flow :3001); hooks vía ~/.claude/agent-flow/hook.js; body chunked; agent_type=name
+- [Delegar siempre](feedback_delegar_siempre.md) — Toda tarea a subagentes desde el inicio; yo solo coordino, investigo cosas chicas y contesto preguntas
+- [Rules por proyecto](reference_rules_por_proyecto.md) — ~/.claude/rules/{entrega,n8n,fhir,huella,cimat,biocheck,agent-flow}.md; subagentes heredan rules, no memoria; al aprender un gotcha, agregarlo ahí

@@ -1,0 +1,58 @@
+# ~/.claude — repo portable de configuración de Claude Code.
+# Regla: viaja la CONFIGURACIÓN, nunca el estado, los secretos ni los transcripts.
+
+# --- Secretos / credenciales ---
+.credentials.json
+settings.local.json
+*.pem
+*.key
+
+# --- Estado de sesión y transcripts ---
+projects/*
+!projects/*/
+projects/*/*
+# Solo la memoria de la máquina canónica se versiona. En otra máquina el slug
+# cambia (projects/-Users-alan/…) y esa copia queda ignorada a propósito: una
+# sola fuente de verdad. Si cambias de máquina canónica, cambia esta línea.
+!projects/-home-richer/memory/
+sessions/
+teams/
+tasks/
+todos/
+plans/
+history.jsonl
+shell-snapshots/
+session-env/
+paste-cache/
+ide/
+
+# --- Caches y datos generados ---
+plugins/
+context-mode/
+mcp-memory/
+file-history/
+cache/
+image-cache/
+backups/
+statsig/
+debug/
+__pycache__/
+*.pyc
+
+# --- Basura de runtime ---
+*.log
+.caveman-mode-log.jsonl
+context-tokens*.json
+.last-*
+.last_inuse_sweep
+agent-flow/*.json
+
+# --- Respaldos manuales ---
+*.bak
+*.bak-*
+*.bak.*
+*.orig
+*.rej
+
+# --- macOS ---
+.DS_Store
