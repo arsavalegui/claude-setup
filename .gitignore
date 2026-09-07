@@ -62,3 +62,4 @@ agent-flow/*.json
 
 # --- macOS ---
 .DS_Store
+agent-flow/rig/resultados*.json

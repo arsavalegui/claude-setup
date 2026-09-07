@@ -30,7 +30,7 @@
 - [Economía de tokens](feedback_token_economy.md) — Si escasea cuota: delegar a Sonnet/Haiku, avisar para /model; Ollama no me reemplaza
 - [Tooling Claude Code 2026-08-27](reference_claude_tooling.md) — claude-mem, headroom barra, task-observer, OmniRoute (serve manual), stack claude-code-tips + fixes
 - [Proyecto CIMAT Rest-Mex](project_cimat_rest_mex.md) — Diplomado CIMAT: transfer learning reseñas turísticas; repo arsavalegui/cimat-rest-mex; datos vía gdown; profe acepta retro por correo
-- [Centro de Mando](project_centro_mando.md) — Vista roster agentes siempre visible en :3002 (agent-flow :3001); hooks vía ~/.claude/agent-flow/hook.js; body chunked; agent_type=name
+- [Centro de Mando](project_centro_mando.md) — agent-flow (:3001) parchado 26 hunks + rig 470 casos verde + hooks.log; Centro de Mando :3002; hooks vía ~/.claude/agent-flow/hook.js; ventana del usuario con puerto 9333
 - [Delegar siempre](feedback_delegar_siempre.md) — Toda tarea a subagentes desde el inicio; yo solo coordino, investigo cosas chicas y contesto preguntas
 - [Rules por proyecto](reference_rules_por_proyecto.md) — ~/.claude/rules/{entrega,n8n,fhir,huella,cimat,biocheck,agent-flow}.md; subagentes heredan rules, no memoria; al aprender un gotcha, agregarlo ahí
 - [Repo claude-setup](project_claude_setup_repo.md) — ~/.claude es repo git privado arsavalegui/claude-setup; commit+push en cada cambio de skills/MCPs/rules; bootstrap.sh para la Mac

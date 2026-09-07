@@ -1,0 +1,35 @@
+dist congelado para esta corrida: {"dist/app.js":"2775dd680113e6771c46e097020bc3a4","dist/webview/index.js":"d892e50e6c446277460b7e95b844e12f","dist/webview/index.css":"2d3956d56f397aaa9abb6b7418512664"}
+casos: 466 en paralelo (4 workers) + 4 de inactividad
+[inactividad] 4 instancias arriba; esperando 6 min de silencio...
+[25/466] m0026 named-type/solo-end-turn/archivo-primero/pausa-reanuda/normal OK ok (9794ms, faltan ~1087s)
+[50/466] m0050 named-type/muerto-a-media-tool/hook-primero/segunda-nueva/normal OK ok (11732ms, faltan ~980s)
+[75/466] m0074 named-type/muerto-tras-entregar/meta-tarde/segunda-nueva/recarga-a-la-mitad OK ok (12357ms, faltan ~1021s)
+[100/466] m0102 named-sin-enriquecer/solo-end-turn/hook-primero/cwd-subdir/reinicio-a-la-mitad OK ok (8687ms, faltan ~937s)
+[125/466] m0125 named-sin-enriquecer/muerto-a-media-tool/hook-primero/segunda-nueva/normal OK ok (11757ms, faltan ~849s)
+[150/466] m0149 named-sin-enriquecer/muerto-tras-entregar/meta-tarde/segunda-nueva/recarga-a-la-mitad OK ok (12592ms, faltan ~820s)
+[175/466] m0177 named-sin-type/solo-end-turn/hook-primero/cwd-subdir/reinicio-a-la-mitad OK ok (8351ms, faltan ~747s)
+[200/466] m0200 named-sin-type/muerto-a-media-tool/hook-primero/segunda-nueva/normal OK ok (11730ms, faltan ~672s)
+[225/466] m0224 named-sin-type/muerto-tras-entregar/meta-tarde/segunda-nueva/recarga-a-la-mitad OK ok (12388ms, faltan ~625s)
+[250/466] m0251 sin-name/solo-end-turn/archivo-primero/pausa-reanuda/normal OK ok (9909ms, faltan ~558s)
+[275/466] m0275 sin-name/muerto-a-media-tool/hook-primero/segunda-nueva/normal OK ok (11900ms, faltan ~487s)
+[300/466] m0299 sin-name/muerto-tras-entregar/meta-tarde/segunda-nueva/recarga-a-la-mitad OK ok (12665ms, faltan ~432s)
+[325/466] m0326 builtin/solo-end-turn/archivo-primero/pausa-reanuda/normal OK ok (10063ms, faltan ~366s)
+[350/466] m0349 builtin/muerto-a-media-tool/hook-primero/una/reinicio-a-la-mitad OK ok (12088ms, faltan ~297s)
+[375/466] m0374 builtin/muerto-tras-entregar/meta-tarde/segunda-nueva/recarga-a-la-mitad OK ok (12592ms, faltan ~237s)
+[400/466] m0399 anidado/solo-end-turn/meta-tarde/resume/reinicio-a-la-mitad OK ok (17410ms, faltan ~172s)
+[425/466] m0425 anidado/muerto-a-media-tool/hook-primero/segunda-nueva/normal OK ok (11837ms, faltan ~107s)
+[450/466] m0449 anidado/muerto-tras-entregar/meta-tarde/segunda-nueva/recarga-a-la-mitad OK ok (19716ms, faltan ~42s)
+
+casos: 470   pasados: 470   fallados: 0
+
+grupo                 total   pasados   fallados
+inactividad               4         4          0
+matriz                  450       450          0
+extra                    16        16          0
+
+causa                      casos  puntos                     escenario minimo que lo reproduce
+
+informativo: la pestana abierta se recupero sola tras reiniciar el servidor en 465/465 casos
+
+resultados: /home/richer/.claude/agent-flow/rig/resultados.json
+EXIT=0

@@ -24,7 +24,7 @@ setTimeout(() => process.exit(0), 1500);
 
 const DIR = path.join(os.homedir(), '.claude', 'agent-flow');
 const PENDING_FILE = path.join(DIR, 'pending-types.json');
-const PENDING_MAX = 200;
+const PENDING_MAX = 2000;
 const IS_WIN = process.platform === 'win32';
 
 function normPath(p) {
@@ -46,8 +46,10 @@ function loadPending() {
 // write. Worst case a name→type mapping is briefly dropped; purely cosmetic.
 // Add a lockfile if that ever matters.
 function rememberDelegation(toolInput) {
-  if (!toolInput || !toolInput.subagent_type) return;
-  const type = toolInput.subagent_type;
+  if (!toolInput) return;
+  // Sin subagent_type, Claude Code usa general-purpose; guardarlo igual para
+  // que ambos canales (hooks y transcript) converjan en el mismo nombre.
+  const type = toolInput.subagent_type || 'general-purpose';
   const pending = loadPending();
   for (const key of [toolInput.name, toolInput.description]) {
     if (key) pending[key] = type;
@@ -100,6 +102,25 @@ process.stdin.on('end', () => {
   try { payload = JSON.parse(input); } catch { process.exit(0); }
   const cwd = payload && payload.cwd;
   if (!cwd) process.exit(0);
+
+  // Bitácora local de hooks (diagnóstico): una línea JSON por evento, sin
+  // contenido de prompts/resultados. Rotación simple: se trunca al pasar 5 MB.
+  try {
+    const LOG = path.join(DIR, 'hooks.log');
+    try { if (fs.statSync(LOG).size > 5e6) fs.truncateSync(LOG, 0); } catch {}
+    const ti = payload.tool_input || {};
+    fs.appendFileSync(LOG, JSON.stringify({
+      ts: new Date().toISOString(),
+      ev: payload.hook_event_name,
+      sid: payload.session_id,
+      agent_id: payload.agent_id,
+      agent_type: payload.agent_type,
+      tool: payload.tool_name,
+      name: ti.name,
+      subagent_type: ti.subagent_type,
+      cwd,
+    }) + '\n');
+  } catch {}
 
   if (payload.hook_event_name === 'PreToolUse' &&
       (payload.tool_name === 'Agent' || payload.tool_name === 'Task')) {

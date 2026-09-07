@@ -1,0 +1,21 @@
+dist 34a60e7639c9a081a9f8a5ff040de744  2026-09-07T13:53:00.923Z  1622s
+casos: 470   pasados: 315   fallados: 155
+
+grupo                 total   pasados   fallados
+inactividad               4         4          0
+matriz                  450       298        152
+extra                    16        13          3
+
+causa                      casos  puntos                     escenario minimo que lo reproduce
+fantasma-vivo                 83  vivo:83 recarga:72        m0016 named-type/solo-end-turn/archivo-primero/una/normal
+                                                            -> ag1 ya termino y aparece thinking
+orquestador-faltante          77  vivo:14 reinicio:44 recarga:60 x014 named-type/subagentstop/archivo-primero/segunda-nueva/normal
+                                                            -> no hay nodo principal
+perdido-tras-recarga          38  recarga:43                m0035 named-type/stop-padre-antes/hook-primero/segunda-nueva/normal
+                                                            -> ag1 deberia verse vivo y no esta
+nodo-faltante                 17  vivo:17 recarga:16 reinicio:4 m0062 named-type/muerto-tras-entregar/archivo-primero/segunda-nueva/reinicio-a-la-mitad
+                                                            -> ag1 deberia verse vivo y no esta
+perdido-tras-reinicio         15  reinicio:15               m0032 named-type/stop-padre-antes/archivo-primero/segunda-nueva/reinicio-a-la-mitad
+                                                            -> ag1 deberia verse vivo y no esta
+
+informativo: la pestana abierta se recupero sola tras reiniciar el servidor en 405/465 casos
