@@ -33,3 +33,4 @@
 - [Centro de Mando](project_centro_mando.md) — Vista roster agentes siempre visible en :3002 (agent-flow :3001); hooks vía ~/.claude/agent-flow/hook.js; body chunked; agent_type=name
 - [Delegar siempre](feedback_delegar_siempre.md) — Toda tarea a subagentes desde el inicio; yo solo coordino, investigo cosas chicas y contesto preguntas
 - [Rules por proyecto](reference_rules_por_proyecto.md) — ~/.claude/rules/{entrega,n8n,fhir,huella,cimat,biocheck,agent-flow}.md; subagentes heredan rules, no memoria; al aprender un gotcha, agregarlo ahí
+- [Repo claude-setup](project_claude_setup_repo.md) — ~/.claude es repo git privado arsavalegui/claude-setup; commit+push en cada cambio de skills/MCPs/rules; bootstrap.sh para la Mac
