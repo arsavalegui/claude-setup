@@ -11,7 +11,7 @@ CLAUDE_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 BOOT="$CLAUDE_DIR/bootstrap"
 
 SKIP_BROWSERS=0; SKIP_CBM=0; SKIP_SERVICES=0; DRY=0
-for a in "$@"; do
+if [ $# -gt 0 ]; then for a in "$@"; do
   case "$a" in
     --skip-browsers) SKIP_BROWSERS=1 ;;
     --skip-cbm)      SKIP_CBM=1 ;;
@@ -20,7 +20,7 @@ for a in "$@"; do
     -h|--help) sed -n '2,9p' "$0"; exit 0 ;;
     *) echo "Flag desconocido: $a"; exit 2 ;;
   esac
-done
+done; fi
 
 # ---------- utilería ----------
 RED=$'\033[31m'; GRN=$'\033[32m'; YEL=$'\033[33m'; BLD=$'\033[1m'; RST=$'\033[0m'
@@ -28,7 +28,7 @@ WARNINGS=()
 step() { printf '\n%s==> %s%s\n' "$BLD" "$1" "$RST"; }
 ok()   { printf '  %s✓%s %s\n' "$GRN" "$RST" "$1"; }
 skip() { printf '  %s·%s %s\n' "$YEL" "$RST" "$1"; }
-warn() { printf '  %s!%s %s\n' "$YEL" "$RST" "$1"; WARNINGS+=("$1"); }
+warn() { printf '  %s!%s %s\n' "$YEL" "$RST" "$1"; WARNINGS[${#WARNINGS[@]}]="$1"; }
 die()  { printf '  %s✗%s %s\n' "$RED" "$RST" "$1"; exit 1; }
 run()  { if [ "$DRY" = 1 ]; then echo "  [dry-run] $*"; else "$@"; fi; }
 # runq: igual que run, pero silencia la salida del comando. No le agregues
@@ -72,14 +72,15 @@ fi
 # ---------- 1. prerequisitos ----------
 step "1. Prerequisitos"
 MISSING=()
-for c in git python3 curl tar; do have "$c" || MISSING+=("$c"); done
+# jq lo usan los hooks cbm-mcp-marker, bash-ban-raw-tools y flutter-ctx-redirect.
+for c in git python3 curl tar jq patch; do have "$c" || MISSING[${#MISSING[@]}]="$c"; done
 if [ ${#MISSING[@]} -gt 0 ]; then
   echo "  Faltan: ${MISSING[*]}"
   [ "$OS" = macos ] && echo "  Instálalos con: brew install ${MISSING[*]}"
   [ "$OS" = linux ] && echo "  Instálalos con: pkexec pacman -S ${MISSING[*]}   (sin sudo interactivo en esta máquina)"
   die "prerequisitos faltantes"
 fi
-ok "git, python3, curl, tar presentes"
+ok "git, python3, curl, tar, jq, patch presentes"
 
 if ! have node; then
   echo "  node no está instalado. Recomendado (ambos sistemas):"
@@ -116,7 +117,15 @@ for p in "${NPM_PKGS[@]}"; do
   if [ "$cur" = "$want" ] || { [ "$want" = "latest" ] && [ -n "$cur" ]; }; then
     skip "$name ya en $cur"
   else
-    runq npm i -g "$p" && ok "$p instalado" || warn "falló npm i -g $p"
+    if [ "$DRY" = 1 ]; then echo "  [dry-run] npm i -g $p"
+    elif err="$(npm i -g "$p" 2>&1)"; then ok "$p instalado"
+    else
+      case "$err" in
+        *EACCES*|*"permission denied"*)
+          warn "npm i -g $p falló por permisos. No uses sudo: instala node con mise (mise use -g node@26) o corre 'npm config set prefix ~/.local'." ;;
+        *) warn "falló npm i -g $p" ;;
+      esac
+    fi
   fi
 done
 
@@ -222,19 +231,25 @@ if ! have claude; then
   warn "sin CLI 'claude' no puedo instalar plugins; corre el bootstrap otra vez tras abrir una terminal nueva"
 else
   # Los marketplaces y los plugins salen de settings.json, que ya viaja en el repo.
-  node -e '
+  PLUGIN_LINES="$(node -e '
     const s = require(process.argv[1] + "/settings.json");
     for (const [name, m] of Object.entries(s.extraKnownMarketplaces || {}))
       console.log("MARKET\t" + name + "\t" + (m.source?.repo || ""));
     for (const [k, on] of Object.entries(s.enabledPlugins || {}))
       if (on) console.log("PLUGIN\t" + k);
-  ' "$CLAUDE_DIR" | while IFS=$'\t' read -r kind a b; do
+  ' "$CLAUDE_DIR")"
+  # Sin pipe: dentro de un pipe el while corre en subshell y los warn se perderían.
+  [ -n "$PLUGIN_LINES" ] && while IFS=$'\t' read -r kind a b; do
     if [ "$kind" = MARKET ] && [ -n "$b" ]; then
-      runq claude plugin marketplace add "$b" && ok "marketplace $a ($b)" || skip "marketplace $a ya estaba o falló"
+      if [ "$DRY" = 1 ]; then echo "  [dry-run] claude plugin marketplace add $b"
+      elif claude plugin marketplace add "$b" </dev/null >/dev/null 2>&1; then ok "marketplace $a ($b)"
+      else warn "no pude agregar el marketplace $a ($b); revísalo a mano"; fi
     elif [ "$kind" = PLUGIN ]; then
-      runq claude plugin install "$a" && ok "plugin $a" || skip "plugin $a ya estaba o falló"
+      if [ "$DRY" = 1 ]; then echo "  [dry-run] claude plugin install $a"
+      elif claude plugin install "$a" </dev/null >/dev/null 2>&1; then ok "plugin $a"
+      else warn "no pude instalar el plugin $a; revísalo a mano"; fi
     fi
-  done
+  done <<< "$PLUGIN_LINES"
 fi
 
 # ---------- 6. servidores MCP ----------
@@ -286,11 +301,40 @@ else
   fi
 fi
 
+# ---------- 7b. rtk ----------
+step "7b. rtk"
+# El hook de PreToolUse reescribe comandos con rtk. Si falta, el hook no rompe
+# nada (falla suave), pero se pierden los ahorros de tokens.
+if have rtk; then
+  ok "ya instalado: $(rtk --version 2>/dev/null | head -1)"
+else
+  case "$OS/$ARCH" in
+    linux/amd64) RTK_ASSET=rtk-x86_64-unknown-linux-musl.tar.gz ;;
+    linux/arm64) RTK_ASSET=rtk-aarch64-unknown-linux-gnu.tar.gz ;;
+    macos/amd64) RTK_ASSET=rtk-x86_64-apple-darwin.tar.gz ;;
+    macos/arm64) RTK_ASSET=rtk-aarch64-apple-darwin.tar.gz ;;
+  esac
+  RTK_URL="https://github.com/rtk-ai/rtk/releases/latest/download/$RTK_ASSET"
+  if [ "$DRY" = 1 ]; then echo "  [dry-run] curl -fsSL $RTK_URL | tar -xz -> ~/.local/bin/rtk"
+  else
+    TMP="$(mktemp -d)"
+    if curl -fsSL "$RTK_URL" -o "$TMP/rtk.tar.gz" 2>/dev/null && tar -xzf "$TMP/rtk.tar.gz" -C "$TMP" 2>/dev/null; then
+      BIN="$(find "$TMP" -type f -name rtk -perm -u+x | head -1)"
+      if [ -n "$BIN" ]; then install -m 755 "$BIN" "$HOME/.local/bin/rtk" && ok "rtk instalado"
+      else warn "el tar.gz de rtk no traía el binario esperado"; fi
+    else
+      warn "no pude bajar rtk desde $RTK_URL. Es opcional: sin él el hook de rtk falla suave."
+    fi
+    rm -rf "$TMP"
+  fi
+fi
+
 # ---------- 8. memoria persistente ----------
 step "8. Memoria persistente"
 # Claude Code guarda la memoria bajo projects/<$HOME con las / como ->/memory.
 SRC_MEM="$CLAUDE_DIR/projects/-home-richer/memory"
-SLUG="$(printf '%s' "$HOME" | tr '/' '-')"
+# Misma fórmula que hooks/memory-repo-symlink: / y . se vuelven -.
+SLUG="$(printf '%s' "$HOME" | sed 's|[/.]|-|g')"
 DST_MEM="$CLAUDE_DIR/projects/$SLUG/memory"
 if [ ! -d "$SRC_MEM" ]; then
   warn "no encuentro la memoria de origen en $SRC_MEM"
@@ -332,7 +376,17 @@ else
     P="$BOOT/services/launchd/com.alan.$s.plist"
     if [ ! -f "$P" ]; then warn "no hay plist para '$s' (ver bootstrap/services/launchd/README.md)"; continue; fi
     if [ "$DRY" = 1 ]; then echo "  [dry-run] instalar y cargar com.alan.$s"; continue; fi
-    sed "s|__HOME__|$HOME|g" "$P" > "$LA/com.alan.$s.plist"
+    # El plist no puede asumir los shims de mise: con `brew install node` los
+    # binarios viven en otro lado. Se resuelve el directorio real del PATH.
+    BIN_DIR=""
+    if grep -q '__BIN_DIR__' "$P"; then
+      BIN_DIR="$(dirname "$(command -v "$s" 2>/dev/null)" 2>/dev/null)"
+      if [ -z "$BIN_DIR" ] || [ "$BIN_DIR" = "." ]; then
+        warn "no encontré el binario '$s' en el PATH; no instalo com.alan.$s"
+        continue
+      fi
+    fi
+    sed -e "s|__HOME__|$HOME|g" -e "s|__BIN_DIR__|$BIN_DIR|g" "$P" > "$LA/com.alan.$s.plist"
     launchctl bootout "gui/$(id -u)/com.alan.$s" >/dev/null 2>&1
     if launchctl bootstrap "gui/$(id -u)" "$LA/com.alan.$s.plist" >/dev/null 2>&1; then ok "com.alan.$s cargado"
     else warn "no pude cargar com.alan.$s"; fi
@@ -373,7 +427,7 @@ fi
 printf '\n%s==> Listo%s\n' "$BLD" "$RST"
 if [ ${#WARNINGS[@]} -gt 0 ]; then
   printf '%sAvisos (%d):%s\n' "$YEL" "${#WARNINGS[@]}" "$RST"
-  for w in "${WARNINGS[@]}"; do echo "  - $w"; done
+  for w in ${WARNINGS[@]+"${WARNINGS[@]}"}; do echo "  - $w"; done
 fi
 cat <<'EOF'
 

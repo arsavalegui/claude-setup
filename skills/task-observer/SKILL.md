@@ -192,7 +192,8 @@ act of memory.
    number doesn't already exist:
 
    ```bash
-   PROPOSED=$(( $(grep -oP '### Observation \K\d+' log.md | sort -n | tail -1) + 1 ))
+   # Portable (grep -oP es solo GNU, no existe en macOS):
+   PROPOSED=$(( $(grep -oE '^### Observation [0-9]+' log.md | grep -oE '[0-9]+' | sort -n | tail -1) + 1 ))
    grep -qE "^### Observation ${PROPOSED}:" log.md && {
      echo "COLLISION on #${PROPOSED}"; exit 1; }
    ```

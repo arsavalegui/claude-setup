@@ -42,7 +42,7 @@ matcher no cambió — sólo hubo que enrolar múltiples templates.
 
 ## Validación empírica del fix
 
-Enrolados 2 users nuevos ("pepe" con CURP fake VASA020925HQRLVLA3,
+Enrolados 2 users nuevos ("pepe" con CURP fake <CURP>,
 "tantris" con VASA…VLA4), 3 templates cada uno. 10 intentos de /clock:
 
 | user | intentos aceptados | max score visto | fallos (todos < 30) |

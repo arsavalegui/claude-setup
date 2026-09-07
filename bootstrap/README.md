@@ -35,7 +35,7 @@ estaba.
 
 **Dentro de `~/.claude`** (ya viene en el clone): `CLAUDE.md`, `settings.json`,
 `rules/` (7 gates por stack), `agents/` (10 subagentes), `commands/`, `hooks/`
-(9 scripts), `bin/`, `skills/`, `statusline*.sh`, las banderas de modo
+(11 scripts), `bin/`, `skills/`, `statusline*.sh`, las banderas de modo
 (`.i-have-adhd-always`, `.caveman-active`, `.ponytail-active`), el patch de
 agent-flow con sus copias `.pristine`, y la memoria persistente.
 
@@ -50,6 +50,11 @@ agent-flow con sus copias `.pristine`, y la memoria persistente.
 
 **Paquetes npm globales**: `@anthropic-ai/claude-code`, `agent-flow-app@0.9.1`,
 `context-mode`, `omniroute`, `playwright@1.63.0`, `tavily-cli`.
+
+**Binarios de release**: `codebase-memory-mcp` y `rtk`. `rtk` es el proxy que el
+hook de PreToolUse usa para ahorrar tokens; se baja de
+[rtk-ai/rtk](https://github.com/rtk-ai/rtk). Es opcional: si falta, el hook falla
+suave y solo pierdes el ahorro.
 
 Las dos versiones fijas no son capricho. El patch de 13 hunks de agent-flow solo
 aplica sobre el `dist/` de 0.9.1, y los navegadores que baja `playwright install`
@@ -127,7 +132,10 @@ viaja en el repo; si Omarchy no está instalado, queda colgado y Claude Code
 simplemente lo ignora. El bootstrap lo reporta.
 
 **macOS**: launchd no tiene `Restart=on-failure`; los plists usan `KeepAlive` con
-`SuccessfulExit=false`. Dos servicios no cruzan: `ollama` se maneja con
+`SuccessfulExit=false`. Tampoco pueden asumir los shims de mise: los plists traen
+`__BIN_DIR__` y el bootstrap lo resuelve con `command -v`, así que funciona igual
+con node de Homebrew. Si el binario no está en el PATH, avisa y no instala ese
+plist. Dos servicios no cruzan: `ollama` se maneja con
 `brew services`, y `mic-meeting-recorder` depende de `pactl` de PipeWire y del
 `.monitor` de un sink de PulseAudio, cosas que macOS no tiene. Para grabar el audio
 del sistema en Mac hace falta un loopback tipo BlackHole y cambiar la detección a

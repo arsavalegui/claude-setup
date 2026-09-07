@@ -6,7 +6,7 @@
   <string>com.alan.agent-flow</string>
   <key>ProgramArguments</key>
   <array>
-    <string>__HOME__/.local/share/mise/shims/agent-flow</string>
+    <string>__BIN_DIR__/agent-flow</string>
     <string>--no-open</string>
     <string>--port</string>
     <string>3001</string>

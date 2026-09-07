@@ -6,7 +6,7 @@
   <string>com.alan.omniroute</string>
   <key>ProgramArguments</key>
   <array>
-    <string>__HOME__/.local/share/mise/shims/omniroute</string>
+    <string>__BIN_DIR__/omniroute</string>
     <string>serve</string>
   </array>
   <key>RunAtLoad</key>

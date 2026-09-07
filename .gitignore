@@ -15,6 +15,12 @@ projects/*/*
 # cambia (projects/-Users-alan/…) y esa copia queda ignorada a propósito: una
 # sola fuente de verdad. Si cambias de máquina canónica, cambia esta línea.
 !projects/-home-richer/memory/
+projects/-home-richer/memory/*
+!projects/-home-richer/memory/*.md
+
+# El hook memory-repo-symlink crea este directorio cuando trabajas con el cwd
+# dentro de ~/.claude. No es la memoria canónica.
+/memory/
 sessions/
 teams/
 tasks/

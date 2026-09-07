@@ -256,6 +256,12 @@
     "n8n-mcp-skills@n8n-mcp-skills": true
   },
   "extraKnownMarketplaces": {
+    "thedotmack": {
+      "source": {
+        "source": "github",
+        "repo": "thedotmack/claude-mem"
+      }
+    },
     "context-mode": {
       "source": {
         "source": "github",

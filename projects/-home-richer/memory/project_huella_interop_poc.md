@@ -19,7 +19,7 @@ Hermano de `lemut_n8n` (chat). Control de asistencia con huella + geolocalizaci�
 ### Estado al cierre de sesión 2026-05-31
 
 Versión `0.2.1`. Funcional end-to-end:
-- 1 usuario enrolado (Alan Valdez Savalegui, CURP VASA020925HQRLVLA1)
+- 1 usuario enrolado (Alan Valdez Savalegui, CURP <CURP>)
 - 2 asistencias registradas (entrada+salida con geo Zapopan)
 - Modo checador, agregar usuario, registros recientes — todos funcionando
 

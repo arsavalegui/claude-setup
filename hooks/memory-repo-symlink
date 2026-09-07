@@ -30,9 +30,10 @@ fi
 # Existing real dir with contents → move them into repo first.
 if [ -d "$projects_memory" ] && [ ! -L "$projects_memory" ]; then
   shopt -s dotglob nullglob
+  # bash 3.2 (macOS) revienta con set -u al expandir un arreglo vacío.
   files=("$projects_memory"/*)
   if [ ${#files[@]} -gt 0 ]; then
-    mv "${files[@]}" "$repo_memory"/
+    mv ${files[@]+"${files[@]}"} "$repo_memory"/
   fi
   rmdir "$projects_memory" 2>/dev/null || true
 fi
