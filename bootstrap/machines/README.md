@@ -19,7 +19,7 @@ o en el `.env` del proyecto que los ocupa, fuera de este repo.
 
 ## Archivos actuales
 
-- `cachyos-richer.env` — la laptop de Alan, CachyOS + Omarchy.
+- `<hostname>.env` (el perfil real de cada máquina; en el export solo viaja el de ejemplo) — la laptop de Alan, CachyOS + Omarchy.
 - `ejemplo-mac.env` — plantilla para macOS, con la explicación de por qué el
   grabador de juntas no cruza a Mac sin un loopback tipo BlackHole.
 
