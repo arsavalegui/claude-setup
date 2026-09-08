@@ -70,9 +70,29 @@ function enrichedBody(payload, raw) {
   return JSON.stringify({ ...payload, agent_type: `${realType} · ${atype}` });
 }
 
+const { execFileSync } = require('child_process');
+const HAS_PROC = fs.existsSync('/proc/self/stat');
+
+// Línea de comandos de un proceso: /proc en Linux, `ps` en macOS.
+function cmdlineOf(pid) {
+  try {
+    if (HAS_PROC) return fs.readFileSync(`/proc/${pid}/cmdline`, 'utf8');
+    return execFileSync('ps', ['-o', 'command=', '-p', String(pid)], { encoding: 'utf8', timeout: 300 });
+  } catch { return ''; }
+}
+
+function ppidOf(pid) {
+  try {
+    if (HAS_PROC) {
+      const stat = fs.readFileSync(`/proc/${pid}/stat`, 'utf8');
+      return parseInt(stat.slice(stat.lastIndexOf(')') + 2).split(' ')[1], 10);
+    }
+    return parseInt(execFileSync('ps', ['-o', 'ppid=', '-p', String(pid)], { encoding: 'utf8', timeout: 300 }), 10);
+  } catch { return 0; }
+}
+
 function cmdlineHasAgentFlow(pid) {
-  try { return fs.readFileSync(`/proc/${pid}/cmdline`, 'utf8').includes('agent-flow'); }
-  catch { return false; }
+  return cmdlineOf(pid).includes('agent-flow');
 }
 
 // claude-mem's worker-service.cjs spawns short-lived `claude` background
@@ -83,13 +103,10 @@ function cmdlineHasAgentFlow(pid) {
 function isClaudeMemDescendant() {
   let p = process.ppid;
   for (let i = 0; i < 10 && p && p > 1; i++) {
-    let cmd;
-    try { cmd = fs.readFileSync(`/proc/${p}/cmdline`, 'utf8'); } catch { return false; }
+    const cmd = cmdlineOf(p);
+    if (!cmd) return false;
     if (cmd.includes('claude-mem') || cmd.includes('worker-service')) return true;
-    try {
-      const stat = fs.readFileSync(`/proc/${p}/stat`, 'utf8');
-      p = parseInt(stat.slice(stat.lastIndexOf(')') + 2).split(' ')[1], 10);
-    } catch { return false; }
+    p = ppidOf(p);
   }
   return false;
 }
