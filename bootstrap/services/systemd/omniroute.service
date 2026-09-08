@@ -1,0 +1,11 @@
+[Unit]
+Description=OmniRoute AI gateway (LLM del bot lemut_n8n)
+After=network-online.target
+
+[Service]
+ExecStart=%h/.local/share/mise/shims/omniroute serve
+Restart=on-failure
+RestartSec=5
+
+[Install]
+WantedBy=default.target

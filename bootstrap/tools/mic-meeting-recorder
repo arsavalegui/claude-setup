@@ -1,0 +1,569 @@
+#!/usr/bin/env python3
+"""
+mic-meeting-recorder
+====================
+
+Daemon que:
+  1. Monitorea PipeWire para detectar cuándo se activa el micrófono integrado.
+  2. Si el mic queda activo más de MIN_ACTIVE_SECONDS → arranca ffmpeg
+     grabando mic + audio del sistema mezclados en un opus mono 16kHz.
+  3. Cuando el mic se libera → detiene la grabación.
+  4. Si duró más de MIN_RECORDING_SECONDS → transcribe con faster-whisper
+     (modelo medium, local) y escribe:
+        - ~/Videos/meetings/YYYY-MM-DD_HHMMSS.opus       (audio)
+        - ~/Videos/meetings/YYYY-MM-DD_HHMMSS.transcript.txt
+        - una nota .md en el vault, clasificada por Claude según el proyecto
+          (ver ROUTES): huella/biocheck se queda en ~/Notes/Meetings/, el
+          resto va a ~/Notes/Projects/<proyecto>/. Si no clasifica, cae a
+          ~/Notes/Meetings/ (fallback seguro). Si el proyecto es biocheck o
+          huella-interop, además se manda la nota a Discord (DISCORD_WEBHOOK_URL).
+     Grabaciones más cortas se descartan (evita ruido de wake-word, etc.).
+
+Config al inicio del script. Sin dependencias fuera del venv de faster-whisper.
+"""
+from __future__ import annotations
+
+import os
+import re
+import signal
+import subprocess
+import sys
+import threading
+import time
+from datetime import datetime
+from pathlib import Path
+
+# ---------- Config ----------
+HOME = Path.home()
+MIC_SOURCE = "alsa_input.pci-0000_03_00.6.HiFi__Mic1__source"
+# Segundos de actividad continua del mic antes de arrancar a grabar.
+MIN_ACTIVE_SECONDS = 3
+# Duración mínima grabada para conservar y transcribir. Si es menor, se tira.
+MIN_RECORDING_SECONDS = 60
+# Segundos entre el fin de una grabación y que se acepte otra.
+COOLDOWN_SECONDS = 30
+# Intervalo del loop de polling del mic.
+POLL_INTERVAL = 1.0
+# Estado del daemon (para banderas y health-check).
+STATE_DIR = HOME / ".local/state/mic-meeting-recorder"
+
+VIDEOS_DIR = HOME / "Videos" / "meetings"
+NOTES_DIR = HOME / "Notes" / "Meetings"
+PROJECTS_DIR = HOME / "Notes" / "Projects"
+
+# Ruteo por proyecto: carpeta destino + tags extra (se les agrega "auto-transcript").
+# "biocheck"/"huella-interop" se quedan en Meetings (son las juntas reales del tema huella).
+# Cualquier proyecto no listado, "otro", o que Claude no logre clasificar cae en DEFAULT_ROUTE
+# (fallback seguro a Meetings, igual que antes de este cambio).
+ROUTES: dict[str, tuple[Path, list[str]]] = {
+    "biocheck": (NOTES_DIR, ["meeting", "biocheck", "huella"]),
+    "huella-interop": (NOTES_DIR, ["meeting", "huella-interop", "huella"]),
+    "lemut": (PROJECTS_DIR / "lemut_n8n", ["nota", "lemut-n8n"]),
+    "fhir": (PROJECTS_DIR / "fhir-agent-poc", ["nota", "fhir-poc"]),
+    "tiktok": (PROJECTS_DIR / "tiktok-edits", ["nota", "tiktok-edits"]),
+    "cimat": (PROJECTS_DIR / "cimat-rest-mex", ["nota", "cimat"]),
+}
+DEFAULT_ROUTE: tuple[Path, list[str]] = (NOTES_DIR, ["meeting"])
+# Proyectos para los que además se manda la nota a Discord.
+DISCORD_PROJECTS = {"biocheck", "huella-interop"}
+DISCORD_WEBHOOK_FILE = HOME / ".config/mic-meeting-recorder/discord_webhook"
+
+WHISPER_VENV_PY = HOME / ".local/share/mic-meeting-recorder/venv/bin/python"
+WHISPER_MODEL = "medium"
+WHISPER_LANG = "es"
+# int8 usa mucho menos RAM y es más rápido en CPU sin pérdida grande de calidad.
+WHISPER_COMPUTE_TYPE = "int8"
+
+# Claude Code CLI headless — usa la suscripción Max del usuario, sin costo API extra.
+CLAUDE_CLI = "claude"
+CLAUDE_TIMEOUT = 180  # segundos
+# Se borra el .opus tras nota exitosa (queda .transcript.txt + .md).
+DELETE_AUDIO_AFTER_NOTE = True
+# ----------------------------
+
+
+def log(msg: str) -> None:
+    ts = datetime.now().strftime("%H:%M:%S")
+    print(f"[{ts}] {msg}", flush=True)
+
+
+def run(cmd: list[str]) -> str:
+    """Run and return stdout as text. Empty string on failure."""
+    try:
+        return subprocess.check_output(cmd, text=True, stderr=subprocess.DEVNULL)
+    except (subprocess.CalledProcessError, FileNotFoundError):
+        return ""
+
+
+def default_monitor() -> str:
+    sink = run(["pactl", "get-default-sink"]).strip()
+    return f"{sink}.monitor" if sink else ""
+
+
+def source_id_to_name() -> dict[str, str]:
+    """Map de source_index → source_name usando `pactl list short sources`."""
+    m: dict[str, str] = {}
+    for line in run(["pactl", "list", "short", "sources"]).splitlines():
+        parts = line.split("\t")
+        if len(parts) >= 2:
+            m[parts[0]] = parts[1]
+    return m
+
+
+SELF_APP_NAME = "mic-meeting-recorder"
+
+
+def count_mic_consumers() -> int:
+    """
+    Cuenta source-outputs activos conectados a MIC_SOURCE, EXCLUYENDO al propio
+    ffmpeg del daemon (marcado con application.name=mic-meeting-recorder).
+    Sin esta exclusión el daemon nunca vería n=0 para detener la grabación.
+    """
+    src_map = source_id_to_name()
+    if not src_map:
+        return 0
+    text = run(["pactl", "list", "source-outputs"])
+    count = 0
+    # `pactl list source-outputs` produce bloques "Source Output #N\n\t...".
+    for block in re.split(r"\n(?=Source Output #)", text):
+        if not block.startswith("Source Output #"):
+            continue
+        m = re.search(r"^\s*Source: (\d+)", block, re.MULTILINE)
+        if not m:
+            continue
+        if src_map.get(m.group(1)) != MIC_SOURCE:
+            continue
+        if f'application.name = "{SELF_APP_NAME}"' in block:
+            continue
+        count += 1
+    return count
+
+
+class Recorder:
+    def __init__(self) -> None:
+        self.proc: subprocess.Popen | None = None
+        self.start_ts: float | None = None
+        self.audio_path: Path | None = None
+
+    @property
+    def running(self) -> bool:
+        return self.proc is not None and self.proc.poll() is None
+
+    def start(self) -> None:
+        VIDEOS_DIR.mkdir(parents=True, exist_ok=True)
+        ts = datetime.now().strftime("%Y-%m-%d_%H%M%S")
+        self.audio_path = VIDEOS_DIR / f"{ts}.opus"
+        monitor = default_monitor()
+
+        # -name (opción del demuxer pulse) setea application.name en el stream
+        # de PulseAudio para que count_mic_consumers pueda excluir a este ffmpeg.
+        # Sin esto, application.name queda como "Lavf62.x.x" (default de libav)
+        # y el daemon se cuenta a sí mismo → nunca ve n=0 → nunca para.
+        inputs = ["-f", "pulse", "-name", SELF_APP_NAME, "-i", MIC_SOURCE]
+        filter_str = "[0:a]aresample=async=1[out]"
+        if monitor:
+            inputs += ["-f", "pulse", "-name", SELF_APP_NAME, "-i", monitor]
+            filter_str = (
+                "[0:a]aresample=async=1[a0];"
+                "[1:a]aresample=async=1[a1];"
+                "[a0][a1]amix=inputs=2:duration=longest:dropout_transition=2[out]"
+            )
+
+        cmd = [
+            "ffmpeg", "-y", "-hide_banner", "-loglevel", "warning",
+            *inputs,
+            "-filter_complex", filter_str,
+            "-map", "[out]",
+            "-c:a", "libopus", "-b:a", "32k", "-ar", "16000", "-ac", "1",
+            str(self.audio_path),
+        ]
+        # stdin=PIPE para poder mandarle 'q' y que cierre limpio.
+        self.proc = subprocess.Popen(
+            cmd, stdin=subprocess.PIPE,
+            stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL,
+        )
+        self.start_ts = time.time()
+        log(f"REC start → {self.audio_path.name}")
+
+    def stop(self) -> tuple[Path, float] | None:
+        if not self.proc or self.start_ts is None or self.audio_path is None:
+            return None
+        duration = time.time() - self.start_ts
+        # 'q' + newline le pide a ffmpeg cierre limpio (finaliza el opus).
+        try:
+            if self.proc.stdin:
+                self.proc.stdin.write(b"q\n")
+                self.proc.stdin.flush()
+        except (BrokenPipeError, OSError):
+            pass
+        try:
+            self.proc.wait(timeout=10)
+        except subprocess.TimeoutExpired:
+            self.proc.send_signal(signal.SIGINT)
+            try:
+                self.proc.wait(timeout=5)
+            except subprocess.TimeoutExpired:
+                self.proc.kill()
+                self.proc.wait()
+        log(f"REC stop  ({duration:.1f}s)")
+        result = (self.audio_path, duration)
+        self.proc = None
+        self.start_ts = None
+        self.audio_path = None
+        return result
+
+
+def transcribe(audio_path: Path) -> str:
+    """Corre faster-whisper en el venv y devuelve el transcript con timestamps."""
+    script = f"""
+import sys
+from faster_whisper import WhisperModel
+model = WhisperModel({WHISPER_MODEL!r}, device="cpu", compute_type={WHISPER_COMPUTE_TYPE!r})
+segments, info = model.transcribe(
+    {str(audio_path)!r},
+    language={WHISPER_LANG!r},
+    vad_filter=True,
+    vad_parameters=dict(min_silence_duration_ms=500),
+    beam_size=5,
+)
+for seg in segments:
+    m1, s1 = divmod(seg.start, 60)
+    m2, s2 = divmod(seg.end, 60)
+    ts = f"[{{int(m1):02d}}:{{s1:05.2f}} → {{int(m2):02d}}:{{s2:05.2f}}]"
+    print(f"{{ts}} {{seg.text.strip()}}", flush=True)
+"""
+    proc = subprocess.run(
+        [str(WHISPER_VENV_PY), "-c", script],
+        capture_output=True, text=True,
+    )
+    if proc.returncode != 0:
+        log(f"whisper stderr: {proc.stderr[:500]}")
+    return proc.stdout
+
+
+CLAUDE_SYSTEM_PROMPT = """
+Eres un asistente que estructura notas de juntas para un vault de Obsidian. Reglas ESTRICTAS:
+
+- NUNCA uses emojis, ni en el título ni en el cuerpo.
+- Escribe en español mexicano natural, primera persona plural cuando aplique.
+- NO inventes información: si algo no aparece en el transcript, no lo pongas. Si no hay decisiones, escribe "Ninguna". Si no hay action items, escribe "Ninguno".
+- NO copies el transcript completo — resume las ideas.
+- Sé conciso: puntos cortos, sin relleno.
+- Salida: la PRIMERA línea es exactamente `PROYECTO: <valor>` (ver catálogo abajo), luego un salto de línea en blanco, y después el markdown empezando con "# " (título). Nada antes de "PROYECTO:", nada después del markdown, sin bloques de código envolventes.
+
+Catálogo de proyectos para la línea PROYECTO (usa exactamente uno de estos valores, en minúsculas):
+- biocheck — sistema de asistencia biométrico: kiosko, huella, PIN, correos DVI/DAD, registro con CURP
+- huella-interop — módulo de identidad/interoperabilidad de huella del Framework Bot (control de asistencia, lector U.are.U, ISO 19794-2)
+- lemut — bot de citas de barbería en n8n: Telegram, WhatsApp, RAG, pagos, agenda, escalamiento multi-cliente, Framework Bot
+- fhir — agente FHIR y datos dinámicos: KQL, jsonb, Postgres, ingesta de archivos FHIR
+- tiktok — edits, brainrot, novelas, recortes, retro de videojuegos para TikTok
+- cimat — diplomado CIMAT, reto Rest-Mex, TensorFlow/PyTorch
+- otro — cualquier otra cosa que no encaje en las anteriores (ej. trámites personales)
+
+Formato exacto (mantén los headings tal cual):
+
+# Título corto de 3 a 6 palabras (relacionado al tema real de la junta)
+
+## Contexto
+Un párrafo breve con el motivo y participantes si se nombran.
+
+## Puntos discutidos
+- Punto 1
+- Punto 2
+- Punto 3
+
+## Decisiones tomadas
+- Decisión 1 (o "Ninguna")
+
+## Pendientes / action items
+- [ ] Responsable — descripción (si se nombra responsable). Si no hay, "Ninguno".
+
+## Notas relacionadas
+- [[wikilinks]] a proyectos que se hayan discutido claramente. Si no aplica, omite la sección.
+""".strip()
+
+# Contexto personal opcional: proyectos del vault, colaboradores y reglas de
+# ruteo de wikilinks. No viaja en el repo. Ejemplo de contenido:
+#
+#   Proyectos disponibles en el vault (usa el path completo entre corchetes dobles):
+#   - [[Projects/mi-proyecto]] — descripción corta
+#
+#   Colaboradores conocidos y sus proyectos:
+#   - Fulano → solo participa en mi-proyecto
+CONTEXTO_FILE = HOME / ".config/mic-meeting-recorder/contexto.md"
+
+
+def claude_system_prompt() -> str:
+    """System prompt base + el contexto personal del usuario, si existe."""
+    try:
+        extra = CONTEXTO_FILE.read_text(encoding="utf-8").strip()
+    except OSError:
+        return CLAUDE_SYSTEM_PROMPT
+    return f"{CLAUDE_SYSTEM_PROMPT}\n\n{extra}" if extra else CLAUDE_SYSTEM_PROMPT
+
+
+FS_SAFE_RE = re.compile(r'[<>:"/\\|?*\n\r\t]+')
+
+
+def fs_safe_title(title: str, max_len: int = 60) -> str:
+    """Normaliza un título para que sirva como nombre de archivo."""
+    t = FS_SAFE_RE.sub(" ", title).strip()
+    t = re.sub(r"\s+", " ", t)
+    if len(t) > max_len:
+        t = t[:max_len].rsplit(" ", 1)[0]
+    return t or "sin-titulo"
+
+
+def call_claude(transcript: str) -> str:
+    """
+    Invoca `claude -p --bare` con el transcript y devuelve el markdown generado.
+    Retorna '' si falla. Usa la suscripción Max del usuario, sin costo API extra.
+    """
+    user_prompt = (
+        "Estructura la siguiente transcripción de junta como una nota de Obsidian "
+        "siguiendo el formato indicado en las instrucciones del sistema.\n\n"
+        f"TRANSCRIPT:\n{transcript}"
+    )
+    # Sin --bare: --bare requiere ANTHROPIC_API_KEY y no usa OAuth de Max.
+    # --exclude-dynamic-system-prompt-sections evita meter cwd/env/git-status
+    # en el system prompt (más limpio para este caso headless).
+    cmd = [
+        CLAUDE_CLI, "-p",
+        "--append-system-prompt", claude_system_prompt(),
+        "--exclude-dynamic-system-prompt-sections",
+        user_prompt,
+    ]
+    # 2 intentos: fallas transitorias del CLI (rc=1 en segundos) tiraban la
+    # nota entera a fallback; un reintento con pausa las absorbe.
+    for intento in (1, 2):
+        try:
+            result = subprocess.run(
+                cmd, capture_output=True, text=True, timeout=CLAUDE_TIMEOUT,
+            )
+        except subprocess.TimeoutExpired:
+            log(f"claude timeout tras {CLAUDE_TIMEOUT}s (intento {intento})")
+            result = None
+        except FileNotFoundError:
+            log(f"claude CLI no encontrado en {CLAUDE_CLI}")
+            return ""
+        if result is not None and result.returncode == 0:
+            return result.stdout.strip()
+        if result is not None:
+            # el CLI a veces manda el error a stdout con stderr vacío
+            detalle = (result.stderr.strip() or result.stdout.strip())[:300]
+            log(f"claude fallo rc={result.returncode} (intento {intento}): {detalle}")
+        if intento == 1:
+            time.sleep(20)
+    return ""
+
+
+def extract_title(claude_output: str) -> str:
+    """Extrae el título del markdown (primera línea que empieza con '# ')."""
+    for line in claude_output.splitlines():
+        line = line.strip()
+        if line.startswith("# "):
+            return line[2:].strip()
+    return ""
+
+
+def parse_proyecto(claude_output: str) -> tuple[str, str]:
+    """
+    Extrae la línea `PROYECTO: <valor>` del inicio de la salida de Claude.
+    Devuelve (proyecto, markdown_sin_esa_línea). Si no viene, o el valor no
+    está en ROUTES ni es "otro", clasifica como "otro" (fallback seguro).
+    """
+    lines = claude_output.splitlines()
+    if lines and lines[0].strip().upper().startswith("PROYECTO:"):
+        valor = lines[0].split(":", 1)[1].strip().lower()
+        resto = "\n".join(lines[1:]).lstrip("\n")
+        return (valor if valor in ROUTES or valor == "otro" else "otro"), resto
+    return "otro", claude_output
+
+
+def discord_webhook_url() -> str:
+    """Lee la URL del webhook desde env o archivo de config. Vacío si no está configurado."""
+    url = os.environ.get("DISCORD_WEBHOOK_URL", "").strip()
+    if url:
+        return url
+    try:
+        return DISCORD_WEBHOOK_FILE.read_text(encoding="utf-8").strip()
+    except FileNotFoundError:
+        return ""
+
+
+def notify_discord(note_path: Path, title: str) -> None:
+    """POST del .md al webhook de Discord. Si falla o no hay webhook, solo loguea y sigue."""
+    url = discord_webhook_url()
+    if not url:
+        log("discord: sin DISCORD_WEBHOOK_URL ni ~/.config/mic-meeting-recorder/discord_webhook, omitiendo")
+        return
+    try:
+        proc = subprocess.run(
+            [
+                "curl", "-fsS",
+                # comillas alrededor del path: curl -F trata ',' y ';' como
+                # separadores y truena con títulos que llevan coma (exit 26)
+                "-F", f'file=@"{note_path}"',
+                "-F", f"content=📝 Nueva nota de junta: {title}",
+                url,
+            ],
+            capture_output=True, text=True, timeout=30,
+        )
+        if proc.returncode != 0:
+            log(f"discord: falló el POST ({(proc.stderr or proc.stdout)[:200]})")
+    except Exception as e:
+        log(f"discord: error al notificar: {e}")
+
+
+def write_outputs(audio_path: Path, duration: float, transcript: str) -> Path | None:
+    """Escribe .transcript.txt + nota .md estructurada por Claude. Devuelve el path de la nota."""
+    slug = audio_path.stem  # 2026-08-27_143012
+    transcript_path = audio_path.with_suffix(".transcript.txt")
+    transcript_path.write_text(transcript, encoding="utf-8")
+
+    fecha = slug[:10]
+    hh = slug[11:13]
+    mm = slug[13:15]
+    hora = f"{hh}:{mm}"
+    dur_min = duration / 60
+    proyecto = "otro"
+
+    # Si el transcript está vacío o casi vacío, no vale la pena llamar a Claude.
+    if len(transcript.strip()) < 40:
+        log(f"transcript casi vacío ({len(transcript)} chars), skip Claude")
+        body = f"# Junta {fecha} {hora}\n\n## Contexto\nTranscript sin contenido significativo.\n"
+        title = f"Junta {fecha} {hora}"
+    else:
+        log("llamando a claude para estructurar nota...")
+        t0 = time.time()
+        raw = call_claude(transcript)
+        dt = time.time() - t0
+        log(f"claude respondió en {dt:.1f}s ({len(raw)} chars)")
+        proyecto, body = parse_proyecto(raw) if raw else ("otro", raw)
+        title = extract_title(body)
+        if not body or not title:
+            log("claude falló o sin título — fallback a nota mínima")
+            proyecto = "otro"
+            body = f"# Junta {fecha} {hora}\n\n## Transcripción\n\n{transcript}\n"
+            title = f"Junta {fecha} {hora}"
+
+    dest_dir, extra_tags = ROUTES.get(proyecto, DEFAULT_ROUTE)
+    dest_dir.mkdir(parents=True, exist_ok=True)
+    tags = ", ".join([*extra_tags, "auto-transcript"])
+    log(f"proyecto clasificado: {proyecto} → {dest_dir}")
+
+    frontmatter = f"""---
+tags: [{tags}]
+fecha: {fecha}
+hora: "{hora}"
+duracion_min: {dur_min:.1f}
+transcript: "{transcript_path}"
+transcripcion_auto: true
+---
+
+"""
+    note = frontmatter + body + "\n"
+
+    safe_title = fs_safe_title(title)
+    filename = f"{fecha} - {safe_title}.md"
+    note_path = dest_dir / filename
+
+    # Colisión: agrega sufijo con la hora si ya existe.
+    if note_path.exists():
+        note_path = dest_dir / f"{fecha} {hh}{mm} - {safe_title}.md"
+
+    note_path.write_text(note, encoding="utf-8")
+    log(f"NOTE → {note_path}")
+
+    if proyecto in DISCORD_PROJECTS:
+        notify_discord(note_path, title)
+
+    if DELETE_AUDIO_AFTER_NOTE:
+        try:
+            audio_path.unlink()
+            log(f"AUDIO borrado ({audio_path.name})")
+        except FileNotFoundError:
+            pass
+
+    return note_path
+
+
+def process_recording(audio_path: Path, duration: float) -> None:
+    if duration < MIN_RECORDING_SECONDS:
+        log(f"drop ({duration:.1f}s < {MIN_RECORDING_SECONDS}s)")
+        try:
+            audio_path.unlink()
+        except FileNotFoundError:
+            pass
+        return
+    log(f"transcribiendo {audio_path.name}...")
+    t0 = time.time()
+    txt = transcribe(audio_path)
+    dt = time.time() - t0
+    log(f"transcript listo en {dt:.1f}s ({len(txt)} chars)")
+    write_outputs(audio_path, duration, txt)
+
+
+def main() -> None:
+    STATE_DIR.mkdir(parents=True, exist_ok=True)
+    rec = Recorder()
+    active_since: float | None = None
+    last_stop: float = 0.0
+
+    log(f"daemon start — mic={MIC_SOURCE}")
+    log(f"trigger={MIN_ACTIVE_SECONDS}s activo, min duración={MIN_RECORDING_SECONDS}s, cooldown={COOLDOWN_SECONDS}s")
+
+    def shutdown(*_: object) -> None:
+        log("señal de shutdown, cerrando...")
+        if rec.running:
+            result = rec.stop()
+            if result:
+                path, dur = result
+                # Procesa síncronamente para no perder el audio al morir el daemon.
+                process_recording(path, dur)
+        sys.exit(0)
+
+    signal.signal(signal.SIGTERM, shutdown)
+    signal.signal(signal.SIGINT, shutdown)
+
+    while True:
+        try:
+            n = count_mic_consumers()
+        except Exception as e:
+            log(f"error contando consumers: {e}")
+            n = 0
+        now = time.time()
+
+        if not rec.running:
+            if n > 0:
+                if active_since is None:
+                    active_since = now
+                    log(f"mic activo (consumers={n}), esperando {MIN_ACTIVE_SECONDS}s...")
+                elif now - active_since >= MIN_ACTIVE_SECONDS:
+                    if now - last_stop < COOLDOWN_SECONDS:
+                        log(f"en cooldown ({int(COOLDOWN_SECONDS - (now - last_stop))}s restantes)")
+                        # No arranca, pero mantiene el active_since para reintentar
+                    else:
+                        rec.start()
+                        active_since = None
+            else:
+                if active_since is not None:
+                    log("mic liberado antes del trigger")
+                active_since = None
+        else:
+            # Grabando: paramos cuando el mic queda libre.
+            if n == 0:
+                result = rec.stop()
+                last_stop = time.time()
+                if result:
+                    path, dur = result
+                    # Procesa en background para no bloquear el detector.
+                    threading.Thread(
+                        target=process_recording, args=(path, dur), daemon=True
+                    ).start()
+
+        time.sleep(POLL_INTERVAL)
+
+
+if __name__ == "__main__":
+    main()

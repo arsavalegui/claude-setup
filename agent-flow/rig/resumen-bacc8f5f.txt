@@ -1,0 +1,17 @@
+dist bacc8f5f4548977946d2419eb6c0a6ea  2026-09-07T12:50:58.830Z  1280s
+casos: 380   pasados: 84   fallados: 296
+
+grupo                 total   pasados   fallados
+inactividad               4         3          1
+matriz                  360        79        281
+extra                    16         2         14
+
+causa                      casos  puntos                     escenario minimo que lo reproduce
+fantasma-vivo                264  reinicio:307 vivo:94 recarga:87 m0001 named-type/subagentstop/archivo-primero/una/normal
+                                                            -> ag1 ya termino y aparece idle
+terminado-desaparecido        83  tras-6-min:1 recarga:102 vivo:15 i003 named-type/subagentstop/archivo-primero/una/normal
+                                                            -> ag1 termino y su nodo ya no esta, con el orquestador todavia en thinking
+cambio-de-sesion              59  recarga:55 reinicio:30    x009 named-type/subagentstop/archivo-primero/segunda-nueva/normal
+                                                            -> seguia faa3f3e6 y tras recargar sigue 578fd6bd
+
+informativo: la pestana abierta se recupero sola tras reiniciar el servidor en 375/375 casos

@@ -1,0 +1,20 @@
+[Unit]
+Description=Auto-record + transcribe meetings when the built-in mic is used
+After=graphical-session.target pipewire.service pipewire-pulse.service
+Wants=pipewire.service pipewire-pulse.service
+
+[Service]
+Type=simple
+ExecStart=%h/.local/bin/mic-meeting-recorder
+Restart=on-failure
+RestartSec=5
+# Environment de la sesión del usuario (necesario para pactl/pipewire).
+Environment=XDG_RUNTIME_DIR=/run/user/%U
+# Sanidad: PATH mínimo por si systemd lo recorta.
+Environment=PATH=/usr/local/bin:/usr/bin:/bin
+# Journal: mantén stdout y stderr en el journal del user.
+StandardOutput=journal
+StandardError=journal
+
+[Install]
+WantedBy=default.target

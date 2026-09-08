@@ -1,0 +1,49 @@
+dist congelado para esta corrida: {"dist/app.js":"2775dd680113e6771c46e097020bc3a4","dist/webview/index.js":"d892e50e6c446277460b7e95b844e12f","dist/webview/index.css":"2d3956d56f397aaa9abb6b7418512664"}
+casos: 466 en paralelo (4 workers) + 4 de inactividad
+[inactividad] 4 instancias arriba; esperando 6 min de silencio...
+[23/466] m0023 named-type/solo-end-turn/meta-tarde/cwd-subdir/normal FALLA fantasma-vivo (7917ms, faltan ~986s)
+[25/466] m0025 named-type/solo-end-turn/archivo-primero/resume/normal OK ok (7610ms, faltan ~989s)
+[50/466] m0049 named-type/muerto-a-media-tool/hook-primero/una/reinicio-a-la-mitad OK ok (12351ms, faltan ~946s)
+[68/466] m0068 named-type/muerto-tras-entregar/meta-tarde/cwd-subdir/normal FALLA fantasma-vivo (11657ms, faltan ~1010s)
+[75/466] m0074 named-type/muerto-tras-entregar/meta-tarde/segunda-nueva/recarga-a-la-mitad OK ok (13021ms, faltan ~1012s)
+[83/466] m0083 named-sin-enriquecer/subagentstop/meta-tarde/cwd-subdir/normal FALLA fantasma-vivo (7984ms, faltan ~976s)
+[98/466] m0098 named-sin-enriquecer/solo-end-turn/meta-tarde/cwd-subdir/normal FALLA fantasma-vivo (8288ms, faltan ~923s)
+[100/466] m0100 named-sin-enriquecer/solo-end-turn/archivo-primero/resume/normal OK ok (7729ms, faltan ~918s)
+[125/466] m0125 named-sin-enriquecer/muerto-a-media-tool/hook-primero/segunda-nueva/normal OK ok (11824ms, faltan ~848s)
+[143/466] m0143 named-sin-enriquecer/muerto-tras-entregar/meta-tarde/cwd-subdir/normal FALLA fantasma-vivo (12314ms, faltan ~836s)
+[150/466] m0149 named-sin-enriquecer/muerto-tras-entregar/meta-tarde/segunda-nueva/recarga-a-la-mitad OK ok (13113ms, faltan ~822s)
+[158/466] m0158 named-sin-type/subagentstop/meta-tarde/cwd-subdir/normal FALLA fantasma-vivo (7893ms, faltan ~792s)
+[173/466] m0173 named-sin-type/solo-end-turn/meta-tarde/cwd-subdir/normal FALLA fantasma-vivo (7509ms, faltan ~743s)
+[175/466] m0175 named-sin-type/solo-end-turn/archivo-primero/resume/normal OK ok (7619ms, faltan ~737s)
+[200/466] m0199 named-sin-type/muerto-a-media-tool/hook-primero/una/reinicio-a-la-mitad OK ok (12390ms, faltan ~666s)
+[218/466] m0218 named-sin-type/muerto-tras-entregar/meta-tarde/cwd-subdir/normal FALLA fantasma-vivo (11561ms, faltan ~632s)
+[225/466] m0224 named-sin-type/muerto-tras-entregar/meta-tarde/segunda-nueva/recarga-a-la-mitad OK ok (12761ms, faltan ~617s)
+[247/466] m0248 sin-name/solo-end-turn/meta-tarde/cwd-subdir/normal FALLA fantasma-vivo (7781ms, faltan ~554s)
+[250/466] m0250 sin-name/solo-end-turn/archivo-primero/resume/normal OK ok (7524ms, faltan ~544s)
+[275/466] m0275 sin-name/muerto-a-media-tool/hook-primero/segunda-nueva/normal OK ok (11471ms, faltan ~477s)
+[293/466] m0293 sin-name/muerto-tras-entregar/meta-tarde/cwd-subdir/normal FALLA fantasma-vivo (11449ms, faltan ~440s)
+[300/466] m0301 builtin/subagentstop/archivo-primero/una/normal OK ok (7018ms, faltan ~423s)
+[323/466] m0323 builtin/solo-end-turn/meta-tarde/cwd-subdir/normal FALLA fantasma-vivo (7951ms, faltan ~360s)
+[325/466] m0325 builtin/solo-end-turn/archivo-primero/resume/normal OK ok (7499ms, faltan ~354s)
+[350/466] m0350 builtin/muerto-a-media-tool/hook-primero/segunda-nueva/normal OK ok (11421ms, faltan ~290s)
+[368/466] m0368 builtin/muerto-tras-entregar/meta-tarde/cwd-subdir/normal FALLA fantasma-vivo (11712ms, faltan ~249s)
+[375/466] m0376 anidado/subagentstop/archivo-primero/una/normal OK ok (6918ms, faltan ~231s)
+[400/466] m0400 anidado/solo-end-turn/archivo-primero/resume/normal OK ok (7427ms, faltan ~166s)
+[425/466] m0425 anidado/muerto-a-media-tool/hook-primero/segunda-nueva/normal OK ok (11859ms, faltan ~103s)
+[450/466] x001 named-type/subagentstop/archivo-primero/una/normal OK ok (6967ms, faltan ~41s)
+
+casos: 470   pasados: 458   fallados: 12
+
+grupo                 total   pasados   fallados
+inactividad               4         4          0
+matriz                  450       438         12
+extra                    16        16          0
+
+causa                      casos  puntos                     escenario minimo que lo reproduce
+fantasma-vivo                 12  vivo:12                   m0023 named-type/solo-end-turn/meta-tarde/cwd-subdir/normal
+                                                            -> ag1 ya termino y aparece thinking
+
+informativo: la pestana abierta se recupero sola tras reiniciar el servidor en 465/465 casos
+
+resultados: /home/richer/.claude/agent-flow/rig/resultados.json
+EXIT=0

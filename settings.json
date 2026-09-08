@@ -1,0 +1,345 @@
+{
+  "$schema": "https://json.schemastore.org/claude-code-settings.json",
+  "env": {
+    "CLAUDE_CODE_EXPERIMENTAL_AGENT_TEAMS": "1",
+    "ENABLE_PROMPT_CACHING_1H": "1",
+    "BASH_MAX_OUTPUT_LENGTH": "10000",
+    "MAX_MCP_OUTPUT_TOKENS": "10000",
+    "ANTHROPIC_DEFAULT_OPUS_MODEL": "claude-opus-5[1m]",
+    "CLAUDE_AUTOCOMPACT_PCT_OVERRIDE": "50",
+    "CLAUDE_CODE_SUBAGENT_MODEL": "claude-sonnet-5"
+  },
+  "attribution": {
+    "commit": "",
+    "pr": ""
+  },
+  "permissions": {
+    "allow": [
+      "Bash(SwitchAudioSource -a *)",
+      "Bash(SwitchAudioSource -c *)",
+      "Bash(az account show *)",
+      "Bash(az containerapp show *)",
+      "Bash(az cosmosdb show *)",
+      "Bash(az group list *)",
+      "Bash(az group show *)",
+      "Bash(az monitor metrics list *)",
+      "Bash(az redis list *)",
+      "Bash(az redis show *)",
+      "Bash(az resource list *)",
+      "Bash(ffprobe *)",
+      "Bash(git fetch *)",
+      "Bash(glab api *)",
+      "Bash(glab auth status *)",
+      "Bash(glab ci get *)",
+      "Bash(glab ci list *)",
+      "Bash(glab ci status *)",
+      "Bash(glab ci trace *)",
+      "Bash(glab mr diff *)",
+      "Bash(glab mr list *)",
+      "Bash(glab mr view *)",
+      "Bash(launchctl list *)",
+      "Bash(launchctl print *)",
+      "Bash(plutil -lint *)",
+      "Bash(pmset -g *)",
+      "Bash(system_profiler *)",
+      "Bash(terraform fmt -check *)",
+      "Bash(terraform validate *)",
+      "Edit",
+      "NotebookEdit",
+      "Write"
+    ],
+    "defaultMode": "bypassPermissions"
+  },
+  "model": "fable[1m]",
+  "hooks": {
+    "PreToolUse": [
+      {
+        "matcher": "Bash",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "~/.claude/hooks/run-cli-hook context-mode hook claude-code pretooluse"
+          },
+          {
+            "type": "command",
+            "command": "~/.claude/hooks/bash-ban-raw-tools"
+          },
+          {
+            "type": "command",
+            "command": "~/.claude/hooks/flutter-ctx-redirect"
+          },
+          {
+            "type": "command",
+            "command": "~/.claude/hooks/run-cli-hook rtk hook claude"
+          }
+        ]
+      },
+      {
+        "matcher": "Grep|Glob|Read|Search",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "~/.claude/hooks/cbm-code-discovery-gate"
+          }
+        ]
+      },
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "\"node\" \"$HOME/.claude/agent-flow/hook.js\"",
+            "timeout": 2
+          }
+        ]
+      }
+    ],
+    "PostToolUse": [
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "~/.claude/hooks/run-cli-hook context-mode hook claude-code posttooluse"
+          },
+          {
+            "type": "command",
+            "command": "~/.claude/hooks/cbm-mcp-marker"
+          }
+        ]
+      },
+      {
+        "matcher": "Edit|Write|MultiEdit",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "~/.claude/hooks/sync-copilot-on-edit"
+          },
+          {
+            "type": "command",
+            "command": "~/.claude/hooks/sync-runner-tools-on-edit"
+          }
+        ]
+      },
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "\"node\" \"$HOME/.claude/agent-flow/hook.js\"",
+            "timeout": 2
+          }
+        ]
+      }
+    ],
+    "PreCompact": [
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "~/.claude/hooks/run-cli-hook context-mode hook claude-code precompact"
+          }
+        ]
+      }
+    ],
+    "SessionStart": [
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "~/.claude/hooks/run-cli-hook context-mode hook claude-code sessionstart"
+          },
+          {
+            "type": "command",
+            "command": "~/.claude/hooks/memory-repo-symlink"
+          },
+          {
+            "type": "command",
+            "command": "~/.claude/hooks/cbm-session-reminder"
+          }
+        ]
+      },
+      {
+        "matcher": "startup",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "~/.claude/hooks/cbm-session-reminder"
+          }
+        ]
+      },
+      {
+        "matcher": "resume",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "~/.claude/hooks/cbm-session-reminder"
+          }
+        ]
+      },
+      {
+        "matcher": "clear",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "~/.claude/hooks/cbm-session-reminder"
+          }
+        ]
+      },
+      {
+        "matcher": "compact",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "~/.claude/hooks/cbm-session-reminder"
+          }
+        ]
+      },
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "\"$HOME/.claude/hooks/context-mode-cache-heal.mjs\""
+          }
+        ]
+      },
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "\"node\" \"$HOME/.claude/agent-flow/hook.js\"",
+            "timeout": 2
+          }
+        ]
+      }
+    ],
+    "PostToolUseFailure": [
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "\"node\" \"$HOME/.claude/agent-flow/hook.js\"",
+            "timeout": 2
+          }
+        ]
+      }
+    ],
+    "SubagentStart": [
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "\"node\" \"$HOME/.claude/agent-flow/hook.js\"",
+            "timeout": 2
+          }
+        ]
+      },
+      {
+        "matcher": "*",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "\"$HOME/.claude/hooks/cbm-subagent-reminder\"",
+            "timeout": 5
+          }
+        ]
+      }
+    ],
+    "SubagentStop": [
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "\"node\" \"$HOME/.claude/agent-flow/hook.js\"",
+            "timeout": 2
+          }
+        ]
+      }
+    ],
+    "Notification": [
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "\"node\" \"$HOME/.claude/agent-flow/hook.js\"",
+            "timeout": 2
+          }
+        ]
+      }
+    ],
+    "Stop": [
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "\"node\" \"$HOME/.claude/agent-flow/hook.js\"",
+            "timeout": 2
+          }
+        ]
+      }
+    ],
+    "SessionEnd": [
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "\"node\" \"$HOME/.claude/agent-flow/hook.js\"",
+            "timeout": 2
+          }
+        ]
+      }
+    ]
+  },
+  "statusLine": {
+    "type": "command",
+    "command": "bash ~/.claude/statusline.sh"
+  },
+  "enabledPlugins": {
+    "caveman@caveman": true,
+    "claude-mem@thedotmack": true,
+    "context-mode@context-mode": true,
+    "ponytail@ponytail": true,
+    "i-have-adhd@i-have-adhd": true,
+    "n8n-mcp-skills@n8n-mcp-skills": true
+  },
+  "extraKnownMarketplaces": {
+    "thedotmack": {
+      "source": {
+        "source": "github",
+        "repo": "thedotmack/claude-mem"
+      }
+    },
+    "caveman": {
+      "source": {
+        "source": "github",
+        "repo": "JuliusBrussee/caveman"
+      }
+    },
+    "context-mode": {
+      "source": {
+        "source": "github",
+        "repo": "mksglu/context-mode"
+      }
+    },
+    "ponytail": {
+      "source": {
+        "source": "github",
+        "repo": "DietrichGebert/ponytail"
+      }
+    },
+    "i-have-adhd": {
+      "source": {
+        "source": "github",
+        "repo": "ayghri/i-have-adhd"
+      }
+    },
+    "n8n-mcp-skills": {
+      "source": {
+        "source": "github",
+        "repo": "czlonkowski/n8n-skills"
+      }
+    }
+  },
+  "effortLevel": "xhigh",
+  "advisorModel": "opus",
+  "skipDangerousModePermissionPrompt": true,
+  "theme": "dark",
+  "agentPushNotifEnabled": true
+}
