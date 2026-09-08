@@ -28,6 +28,9 @@ WARNINGS=()
 step() { printf '\n%s==> %s%s\n' "$BLD" "$1" "$RST"; }
 ok()   { printf '  %s✓%s %s\n' "$GRN" "$RST" "$1"; }
 skip() { printf '  %s·%s %s\n' "$YEL" "$RST" "$1"; }
+# Escapa lo que sed interpreta en el lado derecho de s|a|b| (| & \) para que un
+# $HOME o PATH raro no rompa la sustitución.
+sedesc() { printf '%s' "$1" | sed 's/[|&\\]/\\&/g'; }
 warn() { printf '  %s!%s %s\n' "$YEL" "$RST" "$1"; WARNINGS[${#WARNINGS[@]}]="$1"; }
 die()  { printf '  %s✗%s %s\n' "$RED" "$RST" "$1"; exit 1; }
 run()  { if [ "$DRY" = 1 ]; then echo "  [dry-run] $*"; else "$@"; fi; }
@@ -116,6 +119,9 @@ for p in "${NPM_PKGS[@]}"; do
       try{const j=JSON.parse(s);console.log((j.dependencies?.[process.argv[1]]||{}).version||"")}catch{console.log("")}})' "$name")"
   if [ "$cur" = "$want" ] || { [ "$want" = "latest" ] && [ -n "$cur" ]; }; then
     skip "$name ya en $cur"
+  elif [ "$name" = "@anthropic-ai/claude-code" ] && have claude; then
+    # El instalador nativo deja ~/.local/bin/claude y npm se niega a pisarlo (EEXIST).
+    skip "claude ya instalado fuera de npm ($(claude --version 2>/dev/null | head -1)); no se pisa"
   else
     if [ "$DRY" = 1 ]; then echo "  [dry-run] npm i -g $p"
     elif err="$(npm i -g "$p" 2>&1)"; then ok "$p instalado"
@@ -347,6 +353,20 @@ else
     # Sin sobrescribir lo que ya exista en el destino.
     for f in "$SRC_MEM"/*.md; do [ -e "$f" ] && [ ! -e "$DST_MEM/$(basename "$f")" ] && cp "$f" "$DST_MEM/"; done
     ok "memoria copiada a projects/$SLUG/memory/ ($(ls -1 "$DST_MEM" | wc -l | tr -d ' ') archivos)"
+    # MEMORY.md es el índice que Claude carga en cada sesión. Como no se pisa si ya
+    # existe, las memorias recién copiadas quedarían sin entrada: se agregan las
+    # líneas del índice canónico cuyo archivo todavía no aparece en el destino.
+    if [ -f "$SRC_MEM/MEMORY.md" ] && [ -f "$DST_MEM/MEMORY.md" ]; then
+      added=0
+      [ -n "$(tail -c1 "$DST_MEM/MEMORY.md")" ] && echo >> "$DST_MEM/MEMORY.md"
+      while IFS= read -r line; do
+        f="$(printf '%s' "$line" | sed -n 's/.*](\([^)]*\.md\)).*/\1/p')"
+        [ -n "$f" ] || continue
+        grep -qF "]($f)" "$DST_MEM/MEMORY.md" && continue
+        printf '%s\n' "$line" >> "$DST_MEM/MEMORY.md"; added=$((added+1))
+      done < "$SRC_MEM/MEMORY.md"
+      if [ "$added" -gt 0 ]; then ok "índice MEMORY.md: $added entradas agregadas"; else skip "índice MEMORY.md ya completo"; fi
+    fi
   fi
 fi
 
@@ -372,6 +392,12 @@ elif [ "$OS" = linux ]; then
   done
 else
   LA="$HOME/Library/LaunchAgents"; run mkdir -p "$LA" "$HOME/Library/Logs"
+  # launchd arranca los servicios con PATH mínimo (/usr/bin:/bin), así que los
+  # shebangs `env node` y `env python3` caen en "node: No such file" o en el
+  # python3 3.9 del sistema. Se inyecta el PATH real del shell vía __PATH__.
+  SVC_PATH="$HOME/.local/bin"
+  for b in node python3; do d="$(dirname "$(command -v "$b" 2>/dev/null)" 2>/dev/null)"; [ -n "$d" ] && [ "$d" != "." ] && SVC_PATH="$SVC_PATH:$d"; done
+  SVC_PATH="$SVC_PATH:/opt/homebrew/bin:/usr/local/bin:/usr/bin:/bin"
   for s in $SERVICES_ENABLE; do
     P="$BOOT/services/launchd/com.alan.$s.plist"
     if [ ! -f "$P" ]; then warn "no hay plist para '$s' (ver bootstrap/services/launchd/README.md)"; continue; fi
@@ -386,8 +412,11 @@ else
         continue
       fi
     fi
-    sed -e "s|__HOME__|$HOME|g" -e "s|__BIN_DIR__|$BIN_DIR|g" "$P" > "$LA/com.alan.$s.plist"
+    sed -e "s|__HOME__|$(sedesc "$HOME")|g" -e "s|__BIN_DIR__|$(sedesc "$BIN_DIR")|g" -e "s|__PATH__|$(sedesc "$SVC_PATH")|g" "$P" > "$LA/com.alan.$s.plist"
     launchctl bootout "gui/$(id -u)/com.alan.$s" >/dev/null 2>&1
+    # bootout es asíncrono: si el bootstrap llega antes de que el servicio muera,
+    # falla con "service already loaded". Se espera a que desaparezca (máx. 5 s).
+    for _ in 1 2 3 4 5 6 7 8 9 10; do launchctl print "gui/$(id -u)/com.alan.$s" >/dev/null 2>&1 || break; sleep 0.5; done
     if launchctl bootstrap "gui/$(id -u)" "$LA/com.alan.$s.plist" >/dev/null 2>&1; then ok "com.alan.$s cargado"
     else warn "no pude cargar com.alan.$s"; fi
   done

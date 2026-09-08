@@ -135,7 +135,14 @@ simplemente lo ignora. El bootstrap lo reporta.
 `SuccessfulExit=false`. Tampoco pueden asumir los shims de mise: los plists traen
 `__BIN_DIR__` y el bootstrap lo resuelve con `command -v`, así que funciona igual
 con node de Homebrew. Si el binario no está en el PATH, avisa y no instala ese
-plist. Dos servicios no cruzan: `ollama` se maneja con
+plist. Además launchd arranca con un PATH mínimo (`/usr/bin:/bin`), con el que
+`env node` no existe y `env python3` es el 3.9 de Apple (centro-mando necesita
+3.10+ por `str | None`); por eso los plists traen `__PATH__` y el bootstrap lo
+llena con el directorio real de `node` y `python3` más `~/.local/bin`,
+`/opt/homebrew/bin` y `/usr/local/bin`. También fijan `WorkingDirectory=$HOME`
+porque agent-flow usa su cwd como `workspace` y con el `/` de launchd no le llegaba
+ninguna sesión. Y como `launchctl bootout` es asíncrono, el bootstrap espera a que
+el servicio desaparezca antes de volver a cargarlo. Dos servicios no cruzan: `ollama` se maneja con
 `brew services`, y `mic-meeting-recorder` depende de `pactl` de PipeWire y del
 `.monitor` de un sink de PulseAudio, cosas que macOS no tiene. Para grabar el audio
 del sistema en Mac hace falta un loopback tipo BlackHole y cambiar la detección a
@@ -170,8 +177,24 @@ lo verificado es la **idempotencia**: cada paso detecta lo que ya existe y no lo
 rompe. Los 15 comandos de hook de `settings.json` se ejecutaron uno por uno tal
 como los ve el shell, y los tres plists de launchd parsean con `plistlib`.
 
-Lo que **no** está probado todavía, porque en esta máquina nunca se tomó esa rama:
-la instalación desde cero de los npm globals, la aplicación real del patch de
-agent-flow, la descarga de `codebase-memory-mcp`, la copia de la memoria a un
-`$HOME` distinto y la instalación de servicios. La primera máquina nueva es la
-prueba de fuego. Córrele `--dry-run` antes.
+El 2026-09-08 se corrió completo en la Mac del trabajo (macOS arm64, node de
+`/usr/local/bin`, python3 de Homebrew): npm globals desde cero, patch de agent-flow,
+descarga de `codebase-memory-mcp`, copia de la memoria a `projects/-Users-alan…/` y
+los dos plists de launchd. Tres cosas salieron de ahí y ya están corregidas:
+
+- `npm i -g @anthropic-ai/claude-code` falla con `EEXIST` si `claude` viene del
+  instalador nativo (`~/.local/bin/claude`). Ahora el paso 2 lo detecta y lo salta.
+- Los servicios de launchd morían al arrancar (`env: node: No such file` y
+  `TypeError ... 'type' and 'NoneType'` en centro-mando) por el PATH mínimo de
+  launchd. Ver `__PATH__` en "Notas por sistema".
+- `MEMORY.md` no se copiaba si ya existía en el destino, así que las memorias
+  nuevas quedaban sin entrada en el índice. El paso 8 ahora agrega las líneas
+  que faltan.
+
+Aviso que sigue saliendo y es inofensivo: `codebase-memory-mcp install` reporta
+`hook_script_install ... target: regular file` porque `hooks/cbm-code-discovery-gate`
+y `hooks/cbm-session-reminder` viajan en el repo como archivos normales; el MCP
+queda registrado y conectado de todos modos.
+
+Lo que **no** está probado todavía: Linux desde cero con un `$HOME` que no sea
+`/home/richer`, y `mise` como origen de node en macOS. Córrele `--dry-run` antes.

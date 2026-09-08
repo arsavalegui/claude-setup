@@ -1,8 +1,20 @@
 # Servicios en macOS (launchd)
 
 Equivalentes de las units de systemd. `bootstrap.sh` copia estos plists a
-`~/Library/LaunchAgents/`, sustituye `__HOME__` por el `$HOME` real y los carga con
-`launchctl bootstrap gui/$(id -u)`.
+`~/Library/LaunchAgents/`, sustituye `__HOME__` por el `$HOME` real, `__BIN_DIR__`
+por el directorio del binario (`command -v`) y `__PATH__` por un PATH que incluye
+el `node` y `python3` del shell, y los carga con `launchctl bootstrap gui/$(id -u)`.
+
+`__PATH__` existe porque launchd arranca con `/usr/bin:/bin` y nada más: `env node`
+no se encuentra y `env python3` es el 3.9 de Apple, que no entiende `str | None`.
+Si un servicio muere al cargar, lo primero es `tail ~/Library/Logs/<servicio>.log`.
+
+Los plists también fijan `WorkingDirectory` en `__HOME__`. launchd arranca en `/`,
+y agent-flow registra su cwd como `workspace` en `~/.claude/agent-flow/*.json`;
+`hook.js` solo reenvía a los listeners cuyo workspace contiene el cwd de la sesión,
+y nada cuelga de `//`, así que con cwd `/` agent-flow se quedaba en "WAITING FOR
+AGENT SESSION" para siempre. systemd --user arranca en `$HOME` y por eso en Linux
+nunca se notó.
 
 launchd no tiene `Restart=on-failure`. El equivalente es `KeepAlive` con
 `SuccessfulExit=false`, que es lo que usan estos tres plists.

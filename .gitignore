@@ -48,10 +48,18 @@ __pycache__/
 # --- Basura de runtime ---
 *.log
 .caveman-mode-log.jsonl
+.caveman-nudge-shown
+.caveman-sessions/
 context-tokens*.json
 .last-*
 .last_inuse_sweep
 agent-flow/*.json
+# Estado que Claude Code escribe solo (feedback drafts, telemetría, política
+# remota de la cuenta). No es configuración.
+feedback/
+telemetry/
+policy-limits.json
+remote-settings.json
 
 # --- Respaldos manuales ---
 *.bak

@@ -11,10 +11,17 @@
     <string>--port</string>
     <string>3001</string>
   </array>
+  <!-- agent-flow registra su cwd como "workspace" y hook.js solo le reenvía las
+       sesiones que cuelgan de ahí. launchd arranca en / y nada cuelga de "//";
+       systemd --user arranca en $HOME, así que aquí se iguala. -->
+  <key>WorkingDirectory</key>
+  <string>__HOME__</string>
   <key>EnvironmentVariables</key>
   <dict>
     <key>AGENT_FLOW_TELEMETRY</key>
     <string>false</string>
+    <key>PATH</key>
+    <string>__PATH__</string>
   </dict>
   <key>RunAtLoad</key>
   <true/>

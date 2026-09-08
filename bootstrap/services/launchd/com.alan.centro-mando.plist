@@ -10,6 +10,13 @@
     <string>python3</string>
     <string>__HOME__/.local/share/centro-mando/server.py</string>
   </array>
+  <key>WorkingDirectory</key>
+  <string>__HOME__</string>
+  <key>EnvironmentVariables</key>
+  <dict>
+    <key>PATH</key>
+    <string>__PATH__</string>
+  </dict>
   <key>RunAtLoad</key>
   <true/>
   <key>KeepAlive</key>

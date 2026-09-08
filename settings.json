@@ -14,7 +14,6 @@
     "pr": ""
   },
   "permissions": {
-    "defaultMode": "default",
     "allow": [
       "Bash(SwitchAudioSource -a *)",
       "Bash(SwitchAudioSource -c *)",
@@ -49,28 +48,7 @@
       "NotebookEdit",
       "Write"
     ],
-    "ask": [
-      "Bash(git add *)",
-      "Bash(git branch -D *)",
-      "Bash(git branch -d *)",
-      "Bash(git checkout *)",
-      "Bash(git cherry-pick *)",
-      "Bash(git clean *)",
-      "Bash(git commit *)",
-      "Bash(git config *)",
-      "Bash(git merge *)",
-      "Bash(git push *)",
-      "Bash(git rebase *)",
-      "Bash(git remote *)",
-      "Bash(git reset *)",
-      "Bash(git restore *)",
-      "Bash(git revert *)",
-      "Bash(git stash *)",
-      "Bash(git switch *)",
-      "Bash(git tag *)",
-      "Bash(git worktree add *)",
-      "Bash(git worktree remove *)"
-    ]
+    "defaultMode": "bypassPermissions"
   },
   "model": "fable[1m]",
   "hooks": {
@@ -252,6 +230,16 @@
             "timeout": 2
           }
         ]
+      },
+      {
+        "matcher": "*",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "\"$HOME/.claude/hooks/cbm-subagent-reminder\"",
+            "timeout": 5
+          }
+        ]
       }
     ],
     "SubagentStop": [
@@ -351,6 +339,7 @@
   },
   "effortLevel": "xhigh",
   "advisorModel": "opus",
+  "skipDangerousModePermissionPrompt": true,
   "theme": "dark",
   "agentPushNotifEnabled": true
 }
