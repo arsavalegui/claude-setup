@@ -1,0 +1,36 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+    <key>Label</key>
+    <string>com.alan.meeting-recorder.launcher</string>
+
+    <!-- Launches the app bundle rather than the script directly. That matters:
+         macOS attaches the microphone permission to a bundle identity, and a
+         plain LaunchAgent has none, so running the watcher straight from launchd
+         produced empty recordings no matter which permissions were granted. -->
+    <key>ProgramArguments</key>
+    <array>
+        <string>/usr/bin/open</string>
+        <string>-a</string>
+        <string>/Users/alan.valdezsavalegui/Applications/MeetingRecorder.app</string>
+    </array>
+
+    <key>RunAtLoad</key>
+    <true/>
+
+    <!-- `open` on an already-running app does nothing, so this is a harmless
+         self-heal: if the watcher ever dies, it is back within five minutes. -->
+    <key>StartInterval</key>
+    <integer>300</integer>
+
+    <key>StandardOutPath</key>
+    <string>/Users/alan.valdezsavalegui/.meeting-recorder/logs/launcher.out.log</string>
+
+    <key>StandardErrorPath</key>
+    <string>/Users/alan.valdezsavalegui/.meeting-recorder/logs/launcher.err.log</string>
+
+    <key>ProcessType</key>
+    <string>Background</string>
+</dict>
+</plist>
