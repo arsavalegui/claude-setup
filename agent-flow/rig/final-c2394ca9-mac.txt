@@ -1,0 +1,35 @@
+dist congelado para esta corrida: {"dist/app.js":"c2394ca9e978a3eab610ede8b6ca7db8","dist/webview/index.js":"d892e50e6c446277460b7e95b844e12f","dist/webview/index.css":"2d3956d56f397aaa9abb6b7418512664"}
+casos: 466 en paralelo (6 workers) + 4 de inactividad
+[inactividad] 4 instancias arriba; esperando 6 min de silencio...
+[25/466] m0027 named-type/solo-end-turn/hook-primero/cwd-subdir/reinicio-a-la-mitad OK ok (7971ms, faltan ~710s)
+[50/466] m0050 named-type/muerto-a-media-tool/hook-primero/segunda-nueva/normal OK ok (10152ms, faltan ~630s)
+[75/466] m0076 named-sin-enriquecer/subagentstop/archivo-primero/una/normal OK ok (6524ms, faltan ~655s)
+[100/466] m0102 named-sin-enriquecer/solo-end-turn/hook-primero/cwd-subdir/reinicio-a-la-mitad OK ok (8076ms, faltan ~599s)
+[125/466] m0125 named-sin-enriquecer/muerto-a-media-tool/hook-primero/segunda-nueva/normal OK ok (10168ms, faltan ~543s)
+[150/466] m0151 named-sin-type/subagentstop/archivo-primero/una/normal OK ok (6509ms, faltan ~524s)
+[175/466] m0177 named-sin-type/solo-end-turn/hook-primero/cwd-subdir/reinicio-a-la-mitad OK ok (8020ms, faltan ~477s)
+[200/466] m0200 named-sin-type/muerto-a-media-tool/hook-primero/segunda-nueva/normal OK ok (10169ms, faltan ~429s)
+[225/466] m0224 named-sin-type/muerto-tras-entregar/meta-tarde/segunda-nueva/recarga-a-la-mitad OK ok (12055ms, faltan ~398s)
+[250/466] m0251 sin-name/solo-end-turn/archivo-primero/pausa-reanuda/normal OK ok (9485ms, faltan ~356s)
+[275/466] m0275 sin-name/muerto-a-media-tool/hook-primero/segunda-nueva/normal OK ok (10222ms, faltan ~310s)
+[300/466] m0301 builtin/subagentstop/archivo-primero/una/normal OK ok (6525ms, faltan ~275s)
+[325/466] m0327 builtin/solo-end-turn/hook-primero/cwd-subdir/reinicio-a-la-mitad OK ok (8096ms, faltan ~233s)
+[350/466] m0350 builtin/muerto-a-media-tool/hook-primero/segunda-nueva/normal OK ok (10214ms, faltan ~189s)
+[375/466] m0376 anidado/subagentstop/archivo-primero/una/normal OK ok (6674ms, faltan ~151s)
+[400/466] m0402 anidado/solo-end-turn/hook-primero/cwd-subdir/reinicio-a-la-mitad OK ok (8080ms, faltan ~110s)
+[425/466] m0425 anidado/muerto-a-media-tool/hook-primero/segunda-nueva/normal OK ok (11248ms, faltan ~68s)
+[450/466] x002 named-type/muerto-tras-entregar/archivo-primero/una/normal OK ok (10598ms, faltan ~27s)
+
+casos: 470   pasados: 470   fallados: 0
+
+grupo                 total   pasados   fallados
+inactividad               4         4          0
+matriz                  450       450          0
+extra                    16        16          0
+
+causa                      casos  puntos                     escenario minimo que lo reproduce
+
+informativo: la pestana abierta se recupero sola tras reiniciar el servidor en 465/465 casos
+
+resultados: /Users/alan.valdezsavalegui/.claude/agent-flow/rig/resultados.json
+RIG EXIT=0

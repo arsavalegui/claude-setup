@@ -1,0 +1,14 @@
+dist c2394ca9e978a3eab610ede8b6ca7db8  macOS D99MFVLWP6  2026-09-08
+casos: 470   pasados: 470   fallados: 0
+
+grupo                 total   pasados   fallados
+inactividad               4         4          0
+matriz                  450       450          0
+extra                    16        16          0
+
+causa                      casos  puntos                     escenario minimo que lo reproduce
+
+informativo: la pestana abierta se recupero sola tras reiniciar el servidor en 465/465 casos
+
+resultados: /Users/alan.valdezsavalegui/.claude/agent-flow/rig/resultados.json
+RIG EXIT=0

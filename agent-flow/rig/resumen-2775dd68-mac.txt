@@ -1,0 +1,16 @@
+dist 2775dd680113e6771c46e097020bc3a4  macOS D99MFVLWP6  2026-09-08 (antes del fix)
+casos: 470   pasados: 435   fallados: 35
+
+grupo                 total   pasados   fallados
+inactividad               4         4          0
+matriz                  450       419         31
+extra                    16        12          4
+
+causa                      casos  puntos                     escenario minimo que lo reproduce
+fantasma-vivo                 35  vivo:45 recarga:45        m0016 named-type/solo-end-turn/archivo-primero/una/normal
+                                                            -> ag1 ya termino y aparece thinking
+
+informativo: la pestana abierta se recupero sola tras reiniciar el servidor en 465/465 casos
+
+resultados: /Users/alan.valdezsavalegui/.claude/agent-flow/rig/resultados.json
+RIG EXIT=0

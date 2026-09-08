@@ -471,7 +471,7 @@
    }
    try {
      state.watcher = fs2.watch(filePath, () => {
-@@ -1628,19 +1914,64 @@
+@@ -1628,25 +1914,78 @@
    const state = session.subagentWatchers.get(filePath);
    if (!state)
      return;
@@ -504,15 +504,22 @@
 +    } catch {
 +    }
 +  }
-+  if (entregado && !state.completeEmitted) {
++  // ponytail: el agent_complete tiene que salir DESPUÉS de los tool_call_* de esta misma
++  // lectura. En macOS FSEvents junta varias escrituras en un solo aviso, así que el
++  // end_turn llega en el mismo lote que sus tool calls; emitido antes, el webview lo
++  // revivía a "thinking" con el tool_call_end siguiente (rig: fantasma-vivo, 35/470).
++  const cerrarSiEntrego = () => {
++    if (!entregado || state.completeEmitted)
++      return;
 +    state.completeEmitted = true;
 +    delegate.emit({
 +      time: delegate.elapsed(sessionId),
 +      type: "agent_complete",
 +      payload: { name: state.agentName }
 +    }, sessionId);
-+  }
++  };
    if (session.inlineProgressAgents.has(state.agentName)) {
++    cerrarSiEntrego();
      delegate.resetInactivityTimer(sessionId);
      return;
    }
@@ -538,7 +545,14 @@
      }
    }
    for (const line of result.lines) {
-@@ -2547,6 +2878,27 @@
+     parser2.processTranscriptLine(line, state.agentName, state.pendingToolCalls, state.seenToolUseIds, sessionId);
+   }
+   handlePermissionDetection(delegate, state.agentName, state.pendingToolCalls, state, sessionId);
++  cerrarSiEntrego();
+   delegate.resetInactivityTimer(sessionId);
+ }
+ 
+@@ -2547,6 +2886,27 @@
    getLastActivityTime: (sessionId) => sessions.get(sessionId)?.lastActivityTime,
    resetInactivityTimer: (sessionId) => resetInactivityTimer(sessionId)
  };
@@ -566,7 +580,7 @@
  function resetInactivityTimer(sessionId) {
    const session = sessions.get(sessionId);
    if (!session)
-@@ -2577,6 +2929,7 @@
+@@ -2577,6 +2937,7 @@
        });
        broadcastSessionLifecycle("ended", sessionId, session.label);
      }
@@ -574,7 +588,7 @@
    }, INACTIVITY_TIMEOUT_MS);
  }
  function watchSession(sessionId, filePath) {
-@@ -2597,6 +2950,13 @@
+@@ -2597,6 +2958,13 @@
      inactivityTimer: null,
      subagentWatchers: /* @__PURE__ */ new Map(),
      spawnedSubagents: /* @__PURE__ */ new Set(),
@@ -588,7 +602,7 @@
      inlineProgressAgents: /* @__PURE__ */ new Set(),
      subagentsDirWatcher: null,
      subagentsDir: null,
-@@ -2664,12 +3024,25 @@
+@@ -2664,12 +3032,25 @@
    const encoded = resolved.replace(/[^a-zA-Z0-9]/g, "-");
    const dirsToScan = [];
    const encodedFolded = foldPathCase(encoded);
@@ -615,7 +629,7 @@
          dirsToScan.push(path3.join(CLAUDE_DIR, dir.name));
        }
      }
-@@ -2765,7 +3138,9 @@
+@@ -2765,7 +3146,9 @@
        throw new Error("Failed to start hook server (port in use)");
      }
      hookServer.onEvent((event) => {
@@ -626,7 +640,7 @@
      });
      writeDiscoveryFile(hookPort, workspace);
      scanForActiveSessions(workspace);
-@@ -2832,7 +3207,22 @@
+@@ -2832,7 +3215,22 @@
        });
        sseClients.add(res);
        log6(`[sse] Client connected (${sseClients.size} total)`);
@@ -649,7 +663,7 @@
          sseClients.delete(res);
          log6(`[sse] Client disconnected (${sseClients.size} total)`);
        });
-@@ -2853,6 +3243,10 @@
+@@ -2853,6 +3251,10 @@
        if (sessionList.length > 0) {
          sendSSE(res, { type: "session-list", sessions: sessionList });
        }
@@ -660,7 +674,7 @@
        const sorted = [...sessionList].sort((a, b) => {
          const aActive = a.status === "active" ? 1 : 0;
          const bActive = b.status === "active" ? 1 : 0;
-@@ -2860,9 +3254,10 @@
+@@ -2860,9 +3262,10 @@
            return bActive - aActive;
          return b.lastActivityTime - a.lastActivityTime;
        });
