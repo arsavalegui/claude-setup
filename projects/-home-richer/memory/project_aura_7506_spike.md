@@ -1,0 +1,102 @@
+---
+name: project-aura-7506-spike
+description: "Story 7506 — spike de caché (local vs Azure Redis) para AURA; repos, hallazgos, plan y estado."
+metadata: 
+  node_type: memory
+  type: project
+  originSessionId: 9e31707f-d450-49bb-8159-b31020d47f24
+  modified: 2026-09-03T16:07:46.769Z
+---
+
+Alan participa en el proyecto **AURA** (asistente de IA con permisos por rol/use-case; cliente Stryker, org GitLab `strykercorp/it/ai-office/...`). Compañeros: **Yeison/Jason** (dev), **Gavin** (lead). Alan entró por su experiencia en Terraform + data engineering.
+
+**Story 7506 = spike:** decidir con datos entre **caché in-app local vs Azure Redis**. Dos repos, ambos con branch `feature/7506-spike-cache`, clonados en `~/Documents/repos/` (symlink a OneDrive-Slalom → ojo: OneDrive puede mover/borrar archivos sueltos ahí):
+- **`aura`** (= backend Python; remote `.../aura/aura.git`). *Nota:* hubo un clon duplicado `aura-backend` que era EL MISMO repo/commit; el bueno es `aura`.
+- **`aura-iac`** (Terraform).
+
+**OJO — SIEMPRE analizar contra `origin/dev`, NO contra la branch del spike.** Un análisis previo (2026-07-31) concluyó "solo existe UNA caché (lru_cache)" y "`validate_user_access` es uncached": **AMBAS son FALSAS para `dev`**. Eran ciertas solo en `feature/7506-spike-cache`, que está atrás de `dev` y NO tiene `cosmos_cache.py` (lo agregó el commit `0031141` "Scalability - refactor").
+
+**Hallazgos clave (verificados contra `origin/dev` el 2026-08-04):**
+- SÍ existen **dos** mecanismos de caché, como decía la story:
+  1. `TtlCache(Generic[T])` en `app/data_loader/cosmos_cache.py:17` — thread-safe, `maxsize=4096`, TTL de env `COSMOS_CACHE_TTL_SECONDS` (default 60s; TTL<=0 **desactiva** = kill switch). Cinco instancias module-level en `cosmos_loader.py:33-37`: `_user_cache`, `_use_case_cache`, `_tools_cache`, `_access_cache`, `_aura_config_cache`.
+  2. `@lru_cache(maxsize=1000)` sobre `load_use_case_context` (`cosmos_loader.py:251` en dev, `:146` en la branch) — sin TTL, keyed por `self` (singleton).
+- `validate_user_access` (`cosmos_loader.py:424`) **SÍ está cacheado** vía `_access_cache` (sets en 430/445/457/469/484/499).
+- **El `lru_cache` es redundante y tóxico:** `load_use_case_context` solo llama a `load_user` + `load_use_case` + `load_tools`, las tres YA cacheadas con TTL. O sea es una capa externa sin TTL sobre tres cachés con TTL → pinnea datos stale para siempre mientras las de adentro expiran cada 60s. Candidato #1 a borrar en el plan de consolidación.
+- **Argumento más fuerte pro-Redis:** `TtlCache` es per-process. Con N réplicas hay N cachés independientes (hasta 60s de divergencia), y la **invalidación por eventos que pide Ahmar es IMPOSIBLE** con memoria per-process — no puedes alcanzar a las otras réplicas.
+- TTL único global para las 5 instancias; permisos y system prompt no deberían compartir TTL (el PoC ya modela TTL por DataType).
+- El **PoC** (`aura/poc_cache/`, paquete `aura_cache`) es un sistema paralelo bien hecho pero DESCONECTADO: usa Cosmos **SQL API** (container `user-context`) vs producción **Mongo API**; TTLs hardcodeados en `models.py:21-27` (hot/warm/cold por DataType); telemetría stub (App Insights no cableado); RU solo se lee parcialmente. Adoptarlo = reescribir la capa de datos, no drop-in.
+- `aura-iac` crea un Redis propio (Basic C0, red pública, auth por access-key) en `terraform/general/redis.tf:5`, más el secreto en `key-vault.tf:54` y las env vars en `container-app.tf:144-157`. **CORRECCIÓN (2026-08-06):** un análisis previo dijo que esto "contradice el principio del README" de referenciar servicios compartidos — **es FALSO**. La tabla del README lista como AURA-created: RG, Storage, Key Vault, Cosmos, Container App, Web App, App Insights; y como platform references: CAE, OpenAI, AI Search, ACR, App Service Plan, AcrPull UAMI. **No existe un Redis compartido que referenciar**, así que crearlo es consistente con cómo se tratan Cosmos/Storage/KV. Lo único pendiente es que Yeison no actualizó la tabla del README. Lo que SÍ sigue siendo objeción válida: Basic C0 = un solo nodo, sin SLA ni replicación → no apto para prod (subir a Standard C1) y revisar el acceso público.
+- El Terraform del PoC (`poc_cache/terraform/`) es un **stack paralelo completo** (17 recursos: su propio RG, Log Analytics, App Insights, KV, Redis, Cosmos SQL + container `user-context`, Storage, CAE, Container App, role assignments). Era un sandbox para probar el concepto. **NO es candidato a merge** — correrlo = un segundo ambiente facturándose. Se descarta, no se adapta.
+
+**Pipeline rojo de aura-iac — RESUELTO (causa raíz confirmada):**
+Pipeline #2716593426 (commit `b872c178`) falló con **0 jobs, "yaml invalid"**:
+`Project 'strykercorp/it/ai-office/project-templates/ci-templates' not found or access denied`.
+Es un **include de CI template remoto que no resuelve** — NADA que ver con el Terraform. Queda descartada la hipótesis vieja H1 (scanner de seguridad sobre el Redis público). `terraform fmt -check -recursive` y `terraform validate` pasan local en todo el repo.
+Contexto viejo aún válido: DEV/QA sin lockfile bajan azurerm 4.81.0 vs SCR pin 4.77.0.
+
+**Decisiones (con Yeison, pendientes de confirmar con Ahmar):**
+1. **Rebase de la branch del spike sobre `dev`** antes de mapear la consolidación — **lo owneaba Alan**. OJO: `cosmos_loader.py` divergió fuerte entre branches (line numbers corridos ~100 líneas) → el rebase VA a conflictuar ahí.
+2. Mismatch Cosmos SQL API vs Mongo API → lo ownea **Yeison**.
+3. **Approach = Opción B:** `TtlCache` se queda como tier local (L1) + Redis como L2 compartido detrás de una interfaz común, y el `lru_cache` se pliega al mismo mecanismo. Rechazada la Opción A (portar `CosmosLoader` sobre `aura_cache`) = rewrite de data-access, fuera de scope de un spike. Del PoC portan las *strategies*; su capa de *repository* no.
+
+**Lo que pidió Ahmar (comentario del ticket, 17-jul) para cerrar el spike:**
+- Situación 1 (caché semántico de Q&A) está **parkeada** (depende de auth de APIM + separación de datos entre usuarios).
+- Entregables: (1) decisión escrita in-app vs Redis compartido con razonamiento (consistencia multi-réplica, failure mode, escalamiento, costo de infra net-new); (2) plan de consolidación de las dos capas en una con TTL, mapeado desde los call sites de `cosmos_loader.py`; (3) sketch de invalidación por eventos para que edits de rol/config limpien caché al instante.
+
+**Gaps abiertos:** cero instrumentación de latencia en ambos sistemas → el benchmark NO se puede correr as-is; el path Mongo API no captura RU; la telemetría del PoC no tiene sink agregador; metodología de benchmark indefinida y sin owner; (CORREGIDO 2026-09-02: `az` SI funciona, logueado como alan.valdez@stryker.com contra `Stryker-AIOffice-Scratch` `7da262bc-09c3-4804-8c58-9d3ba3edbe22`; lee el RG `aio-aura-scr`, el Redis y el Container App. Faltan DOS role assignments puntuales: **Key Vault Secrets User** sobre `aio-aura-kv-scr` para leer `redis-primary-access-key`, y **Storage Blob Data Contributor** sobre `aiodeploystatescr` para leer el state remoto y poder correr `terraform plan` local.)
+
+**Plan acordado (junta parkinglot, 2026-07-31, ver `~/Desktop/parkinlotmeet.txt`):**
+1. Primero `aura-iac`: arreglar Terraform para que **pase el pipeline** y cree el Redis.
+2. Agregar env vars para que la app use el Redis.
+3. Experimentación local vs Redis.
+- Para `aura-backend`: cortar branch NUEVA desde `backend` (la de Yeison está ~15 commits atrás y solo tenía Terraform, sin código de app).
+- Alan debe revisar Terraform + Python y los **3 puntos** anotados en comentarios del backend.
+
+**Entregable:** análisis denso con cites `file:line` en `~/Documents/repos/7506-analysis.md` (8 secciones: inventario de caché, data flow, invalidación, PoC, Terraform+pipeline, riesgos/decisiones, plan de benchmark). OJO: ese archivo suelto puede desaparecer por OneDrive — reescribir si falta.
+
+Relacionado: [[reference-meeting-transcription]] [[reference-local-tooling]] [[user-profile]]
+
+**ESTADO 2026-08-30 — spike desplegado en SCR (verificado con `glab`):**
+- Repos reales bajo `strykercorp/it/ai-office/ai-office-project-initiatives/aura/{aura,aura-iac}` (la ruta vieja de esta nota estaba incompleta).
+- **`aura-iac` MR !25** "Add Azure Cache for Redis with Key Vault secret and app env vars (8767)" (`feature/7506-redis` → `main`): **merged**. Reviewers GitLabDuo, marcoantonio.montero, ahmar.gordon.
+- **`aura` MR !41** "Shared Redis cache tier and bake-off instrumentation" (`feature/8767-cache-consolidation` → `dev`): **merged**.
+- **Deploy hecho:** pipeline `main` #123 (`2800472167`, sha `bcc2a6fe`, 2026-08-28, disparado por alan vía API). `scr-deploy` **success**: `Apply complete! Resources: 2 added, 1 changed, 0 destroyed` — creó `azurerm_redis_cache.aura` = **`aio-aura-redis-scr`** en RG `aio-aura-scr` (tardó 26m31s) y el secreto `redis-primary-access-key` en `aio-aura-kv-scr`. Container App quedó con `CACHE_MODE=hybrid`, `REDIS_ENDPOINT/PORT/SSL` y `REDIS_PASSWORD` desde KV.
+- Backend en SCR: pipeline `dev` #345 (`2799924477`, push de patrick.murphy2) con `deploy:scr` success → el código de caché ya corre en SCR. `deploy:dev` y `deploy:qa` quedan **manual**, sin correr.
+- **Jobs rojos del pipeline de `aura-iac` son PREEXISTENTES** (idénticos en #117/#118/#119 de `main`): `dp_track_publish`, `kics-sast`, `checkov_sast`, `orca_fs_scan`, `orca_iac_scan`, `defectdojo_prepare`. Lo que importa (`scr-deploy`, `tfm-provision`, `tfsec`, `semgrep`, `orca_sast_scan`) pasa.
+- **Pendiente:** correr el bake-off contra el Redis real (hasta ahora solo cliente fakeado); Alan sigue sin RBAC en `aio-aura-scr` para verificar por `az`. Intentó avisar por el chat de Stryker y no salió el mensaje.
+
+**BAKE-OFF + BUG BLOQUEANTE (2026-08-30, sesión 2bcd2fbb):**
+- **BUG: SCR no corre hybrid.** **CORRECCION (2026-08-30): el guard NO venia de `dev`** — lo escribio Alan en `ea9c04f`, dentro del MR !41, a proposito (docstring: "Redis is an SCR-only experiment"). Es un candado propio, no un bug ajeno. El cabo suelto: el candado vive en el backend y la env var la pone Terraform, dos repos, y los dos MRs se mergearon sin cruzar ese detalle. El guard: `if mode != LOCAL and os.getenv("AURA_ENV","").strip().lower() != "scr": return LOCAL`. El container app `aio-aura-ca-backend-scr` tiene `CACHE_MODE=hybrid`, `REDIS_*` y `CACHE_STATS_LOG_SECONDS=60`, pero **NO tiene `AURA_ENV`** — `container-app.tf` en `main` nunca la setea. Resultado: `cache_mode()` regresa `local` y **el Redis provisionado está desplegado y sin usar**. Fix = env var en `container-app.tf` + variable + passthrough por environment. Es el paso 1 de todo lo demás.
+- **Números del bake-off (Redis local por brew, 6379).** Workload: 50 usuarios, 5 use cases, 400 sesiones x 8 turnos = 6400 permission checks, TTL 60s. Baseline sin caché = 6400 reads.
+  - Paridad real (`--window-minutes 0`, sin expiración en ningún modo): local x1 = 55 reads (99.1%); **local x3 = 165 (97.4%)**; **redis x3 = 55 (99.1%)**; hybrid x3 = 55 (99.1%). Hit rate del `access` cache: 93.8% en local x1, cae a **81.5%** en local x3, se mantiene 93.8% con Redis.
+  - Ventana 30 min con reloj falso (local expira, Redis no): local x1 = 432 (93.2%); local x3 = 1296 (79.8%); redis/hybrid = 55 (99.1%).
+  - **OJO al citar:** el 99.1% de la tabla de 30 min es **cota superior, no medición** — en modo redis el TTL corre contra reloj real y la corrida dura segundos, así que nada expira. NO contrastarlo con el 79.8%.
+- **El resultado vendible del spike:** 165 -> 55 reads. El tier compartido elimina la duplicación por réplica exacto (3x menos reads a 3 réplicas), que es justo el argumento pro-Redis de la memoria de arriba.
+- **Falta:** (1) setear `AURA_ENV=scr` en `container-app.tf`; (2) correr los números contra el Redis real — puerto 6380 abierto desde la Mac de Alan, DNS resuelve, `redis.tf` sin firewall rules; solo falta la llave del Key Vault (Alan sigue sin RBAC en `aio-aura-scr`).
+
+**Aclaraciones operativas (2026-08-30):**
+- **Selector de modo YA existe y esta en `main`** (commit `535d241`): `.gitlab-ci.yml:53-60` expone `AURA_CACHE_MODE` como variable de pipeline con dropdown hybrid/redis/local (default hybrid) mapeada a `TF_VAR_cache_mode`. Flujo: `TF_VAR_cache_mode` -> `environments/<env>/terraform/main.tf:47` -> modulo `terraform/general` -> `container-app.tf:137` env `CACHE_MODE`. Gateado por `enable_redis`. Flipear el modo solo cambia una env var del Container App, el Redis no se recrea. Link para correr: `https://gitlab.com/strykercorp/it/ai-office/ai-office-project-initiatives/aura/aura-iac/-/pipelines/new` (acepta `?ref=main&var[AURA_CACHE_MODE]=redis`).
+- **Nunca se ha usado ese selector:** el ultimo pipeline de `main` es el #123 del 28-ago y su lista de variables por API regresa `[]` = corrio con el default `hybrid`. Correrlo hoy no mide nada mientras falte `AURA_ENV`.
+- **Permisos de Alan en `aura-iac`: Maintainer (`access_level: 40`)**, y `main` esta protegida a Maintainers para push y merge. Si puede correr pipelines en `main`. Lo que NO tiene es RBAC en el resource group `aio-aura-scr` de Azure. Y **Claude nunca le mando link de un chat de Stryker** (no tiene acceso a ese canal, solo GitLab) — el link que le paso fue el de `/-/pipelines/new`.
+- **Setear `AURA_ENV=scr` es inofensivo:** `_LOCAL_DEV_ENVS` = {local, localhost, development, test} en `app/auth/azure_auth_validation.py:67` y `app/config/env_validation.py:10`, asi que "scr" no prende el auth bypass; y `_strict_validation_enabled()` ya devuelve true hoy (con `AURA_ENV` vacio no es local -> strict).
+- **Dos objetivos distintos, no confundirlos:** (1) numeros contra el Redis real; (2) que SCR corra hybrid en vivo = si necesita el env var `AURA_ENV` en `container-app.tf`. Alternativa sin MR: `az containerapp update --set-env-vars AURA_ENV=scr` sobre `aio-aura-ca-backend-scr`, pero pide RBAC y el siguiente apply lo revierte (drift).
+
+**CORRECCION 2026-09-03 (respuesta de Ahmar en Teams) — se descarta la ruta de RBAC:**
+- **Key Vault:** la restriccion es reciente y **afecta tambien a Ahmar**, no es algo que le vayan a levantar a Alan puntualmente. La idea de fondo: correr el bake-off **desde el propio container app de SCR** (`aio-aura-ca-backend-scr`), no pegandole al Redis desde la Mac de Alan. Via `az containerapp exec -n aio-aura-ca-backend-scr -g aio-aura-scr --command /bin/bash`, las env vars `REDIS_ENDPOINT/PORT/SSL/PASSWORD` ya estan resueltas ahi (Terraform las inyecto al desplegar) — Alan no necesita leer el secreto del KV el mismo.
+- **Blob (`aiodeploystatescr`):** es el storage del **tfstate** de Terraform. Ahmar es explicito: "nadie deberia andar hurgando ahi" y va quedar restringido permanentemente. Si fuera el storage **de la app Aura** (no el de deploy/state) seria otra historia. Se descarta pedir `Storage Blob Data Contributor` sobre este storage — no es el camino.
+- **Impacto:** el "Pendiente" de arriba (dos role assignments: KV Secrets User + Blob Data Contributor) queda obsoleto para el objetivo (1). Nuevo blocker potencial: `az containerapp exec` requiere el permiso `Microsoft.App/containerApps/exec/action` — no confirmado aun si Alan lo tiene.
+- **CONFIRMADO 2026-09-03 — bloqueado:** `az containerapp exec --name aio-aura-ca-backend-scr --resource-group aio-aura-scr` da 403: `does not have authorization to perform action 'Microsoft.App/managedEnvironments/read' over scope '/subscriptions/.../resourceGroups/aio-app-platform-scr/providers/Microsoft.App/managedEnvironments/aio-aiapf-cae-scr'`. El managed environment del container app NO vive en `aio-aura-scr`, vive en un RG de plataforma compartida `aio-app-platform-scr` (recurso `aio-aiapf-cae-scr`). Falta el read ahi, que probablemente ni Ahmar controla (es plataforma, no Aura) — hay que escalar a quien administre `aio-app-platform-scr` o pedirle a Ahmar que enrute la peticion.
+- Script listo para correr en cuanto se destrabe: `aura/scripts/cache_benchmark.py` (branch `feature/8767-cache-consolidation`), ya soporta `--cache-mode redis`/`local`/`hybrid` y lee `REDIS_ENDPOINT/PORT/SSL/PASSWORD` de `app/data_loader/cache_backends.py:312-315` — no necesita cambios, solo ejecutarse donde esas env vars ya resuelvan (dentro del container app).
+- **OJO (verificado 2026-09-03 contra `origin/dev`): el benchmark SI pasa por el guard.** `cache_benchmark.py:182` llama `build_cache()` -> `cache_mode()` (`cache_backends.py:63`), que regresa `local` si `AURA_ENV != "scr"`. Dentro del container SIN `AURA_ENV`, `--cache-mode redis` corre silenciosamente en local. Workaround dentro del `az containerapp exec`: `export AURA_ENV=scr` antes de correr el script (solo afecta ese shell, no la app). El checkout local `feature/8767-cache-consolidation` esta atras de `dev` y NO tiene el guard — no confiar en el para verificar esto.
+- **Causa raiz del 403 (verificado con `az role assignment list`):** Alan solo tiene roles via grupo `aio-aura-developers`: `Contributor` en RG `aio-aura-scr` (si incluye `containerApps/exec/action`) y en `aio-app-platform-scr` solo data-plane (Storage Blob Data Contributor, Search, Foundry User, AcrPull) — ningun `Reader`. Pedir `Reader` (o `Microsoft.App/managedEnvironments/read`) sobre `aio-aiapf-cae-scr` para el grupo. Tenant `4e9dbbfb-394a-4583-8810-53f81f819e3b`.
+- **MR !33 de `aura-iac` YA EXISTE y esta abierto** (`feature/8767-aura-env-scr` -> `main`, "Set AURA_ENV on the Container App so the shared cache tier activates (8767)", pipeline success, reviewers Marco + Ahmar): setea `AURA_ENV = var.environment` en `container-app.tf` para todos los envs + validaciones. NO abrir otro MR para esto; falta que lo aprueben/mergeen y correr el pipeline de `main`.
+
+
+**HALLAZGO 2026-09-03 (tarde) — el Redis es INALCANZABLE desde el container app:**
+- **El portal SI abre shell sin el Reader:** Container App -> Monitoring -> **Console** -> revision 0000018 -> container `backend` -> `/bin/bash`. Entra como `appuser@...:/app$`. El `az containerapp exec` sigue en 403, pero el Console del portal no pasa por `managedEnvironments/read`. Ya NO hace falta pedir el Reader para el benchmark.
+- Dentro: `env` trae `CACHE_MODE=hybrid`, `REDIS_ENDPOINT/PORT/SSL/PASSWORD` resueltos; `scripts/cache_benchmark.py` existe (Dockerfile `COPY . .`); sin `AURA_ENV` (MR !33 sin mergear). `export AURA_ENV=scr` en el shell antes del script.
+- **`--cache-mode redis` truena con `redis.exceptions.TimeoutError: Timeout connecting to server`** en el `SCAN` inicial. Diagnostico desde el container: DNS resuelve a IP publica `20.97.140.42`; `/dev/tcp/...:6380` = BLOCKED; `https://www.microsoft.com` = 200; Cosmos `aio-aura-cdb-scr.mongo.cosmos.azure.com:10255` = OPEN. El Redis esta sano (`publicNetworkAccess=Enabled`, sin firewall rules, `nc` desde la Mac conecta). => **filtro de egress por puerto en la red de plataforma**, 6380 no permitido.
+- SCR consume Storage y Key Vault por **private endpoints** en `aio-aiapf-vnet-scr` / `shared-subnet-scr` (RG plataforma), zonas DNS `privatelink.*` en `aio-app-platform-scr` (`terraform/general/private-endpoints.tf`). Cosmos es publico (0 PE) y si llega por 10255.
+- **Fix recomendado:** private endpoint para el Redis en `aura-iac`, mismo patron que KV (`subresource_names = ["redisCache"]`, zona `privatelink.redis.cache.windows.net`). Pendiente confirmar con Ahmar que esa zona exista en plataforma y este linkeada a la VNet. Alternativa: que plataforma abra 6380 saliente. Mensaje a Ahmar redactado y pendiente de respuesta.
+- Implicacion para el spike: desde el 28-ago el Redis esta desplegado, facturando y sin conexion posible desde la app; MR !33 solo no lo habria arreglado.
+- Rol de Alan verificado: `aio-aura-developers` = Contributor en `aio-aura-scr`; en `aio-app-platform-scr` solo roles a nivel recurso (search, aif) y data-plane, ningun Reader.

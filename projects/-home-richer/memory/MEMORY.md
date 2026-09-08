@@ -34,3 +34,18 @@
 - [Delegar siempre](feedback_delegar_siempre.md) — Toda tarea a subagentes desde el inicio; yo solo coordino, investigo cosas chicas y contesto preguntas
 - [Rules por proyecto](reference_rules_por_proyecto.md) — ~/.claude/rules/{entrega,n8n,fhir,huella,cimat,biocheck,agent-flow}.md; subagentes heredan rules, no memoria; al aprender un gotcha, agregarlo ahí
 - [Repo claude-setup](project_claude_setup_repo.md) — ~/.claude es repo git privado arsavalegui/claude-setup; commit+push en cada cambio de skills/MCPs/rules; bootstrap.sh para la Mac
+
+## Mac del trabajo (Slalom / AURA)
+- [User profile](user_profile.md) — Alan: data engineer en Slalom Guadalajara, stack Snowflake/ADF/DBT/EDW; bilingüe ES/EN, prefiere respuestas cortas.
+- [Meeting transcription workflow](reference_meeting_transcription.md) — Cómo transcribir .mov del Desktop con ffmpeg + whisper-cli; para juntas bilingües usar modelo multilingüe + trocear.
+- [AURA Story 7506 spike](project_aura_7506_spike.md) — Spike caché local vs Azure Redis; repos aura + aura-iac, hallazgos, pipeline rojo, plan y estado.
+- [Pipeline CI de aura](project_aura_ci_pipeline.md) — Qué revisa cada job y cuáles fallos (hadolint, Orca CVEs) ya vienen rotos de `dev`.
+- [Local tooling](reference_local_tooling.md) — Herramientas CLI instaladas (az logueado, glab 1.115.0 logueado, terraform 1.15.8, whisper, SwitchAudioSource).
+- [Live audio capture](reference_live_audio_capture.md) — Capturar audio de salida con BlackHole + Multi-Output; blocker: Multi-Output no incluye BlackHole aún.
+- [Entregables en inglés + Excel de tests](feedback_test_inventory_excel.md) — Todo el contenido de archivos en INGLÉS; y siempre que se escriban tests, generar un xlsx plano en ~/Downloads.
+- [Mensajes en texto plano](feedback_message_drafts_plain.md) — Los borradores para mandar a alguien van sin `>` ni bullets; se pegan mal.
+- [Subagentes de AURA](reference_aura_subagents.md) — 6 agentes propios en ~/.claude/agents: investigator, developer, tester, reviewer, pipeline, azure.
+- [Nota diaria a Obsidian](reference_daily_obsidian_note.md) — launchd 20:00 hora MX escribe ~/Notes/Daily/; el `launchctl load` lo tiene que correr Alan.
+- [Separación de roles entre agentes](feedback_agent_role_separation.md) — quien escribe el código nunca lo revisa; usar aura-reviewer antes de cada MR.
+- [Divergencia de branch en aura](project_aura_branch_divergence.md) — feature/8767-cache-consolidation revierte el guard AURA_ENV de dev; rebasar antes de mergear.
+- [claude-setup en esta Mac](project_claude_setup_mac.md) — ~/.claude es clon de github.com/arsavalegui/claude-setup; qué falta commitear y cómo sincronizar.
