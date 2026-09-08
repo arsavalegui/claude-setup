@@ -101,7 +101,7 @@ have claude || warn "el CLI 'claude' no está en el PATH todavía; se instala en
 # ---------- 2. paquetes npm globales ----------
 step "2. Paquetes npm globales"
 # Versiones fijas donde importa. agent-flow-app y playwright van pineados a
-# propósito: el patch de 13 hunks solo aplica sobre 0.9.1, y los navegadores que
+# propósito: el patch de 26 hunks solo aplica sobre 0.9.1, y los navegadores que
 # baja `playwright install` tienen que casar con la librería 1.63.0.
 NPM_PKGS=(
   "@anthropic-ai/claude-code@latest"
@@ -136,7 +136,7 @@ for p in "${NPM_PKGS[@]}"; do
 done
 
 # ---------- 3. patch de agent-flow ----------
-step "3. Patch de agent-flow (13 hunks)"
+step "3. Patch de agent-flow (26 hunks)"
 NPM_ROOT="$(npm root -g 2>/dev/null)"
 AF="$NPM_ROOT/agent-flow-app"
 PATCH="$CLAUDE_DIR/agent-flow/agent-flow.patch"
@@ -153,7 +153,10 @@ else
   A_PRIS="$CLAUDE_DIR/agent-flow/app.js.pristine"; W_PRIS="$CLAUDE_DIR/agent-flow/webview-index.js.pristine"
   if [ ! -f "$A_INST" ] || [ ! -f "$W_INST" ]; then
     warn "el paquete instalado no tiene dist/app.js o dist/webview/index.js"
-  elif (cd "$AF" && patch -p1 -R --dry-run --silent < "$PATCH" >/dev/null 2>&1); then
+  # -f es obligatorio: el patch de Apple (BSD) sin -f contesta solo la pregunta
+  # "Unreversed patch detected" y devuelve 0 aunque el patch NO esté aplicado,
+  # así que sin -f este paso decía "ya está aplicado" en una Mac virgen.
+  elif (cd "$AF" && patch -p1 -R -f --dry-run --silent < "$PATCH" >/dev/null 2>&1); then
     skip "el patch ya está aplicado"
   elif [ "$(sha "$A_INST")" != "$(sha "$A_PRIS")" ] || [ "$(sha "$W_INST")" != "$(sha "$W_PRIS")" ]; then
     warn "los archivos instalados no coinciden con los .pristine de 0.9.1. NO se aplica el patch a la fuerza. Revisa la versión del paquete."
