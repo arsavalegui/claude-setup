@@ -13,7 +13,7 @@ o en el `.env` del proyecto que los ocupa, fuera de este repo.
 
 | Variable | Para qué |
 |---|---|
-| `MIC_SOURCE` | Fuente de PipeWire del micrófono integrado. Se inyecta en la copia instalada de `mic-meeting-recorder`. Vacío = no se toca el script. |
+| `MIC_SOURCE` | Fuente de PipeWire del micrófono integrado. Se inyecta en la copia instalada de `mic-meeting-recorder`. Vacío = no se toca el script. En Mac acepta además `auto` (default, detecta el headset Corsair en cada grabación), `corsair` o `mac`. |
 | `SERVICES_ENABLE` | Lista separada por espacios de los servicios a habilitar y arrancar. |
 | `OLLAMA_BIN` | Ruta del binario de ollama, solo informativa para el reporte final. |
 

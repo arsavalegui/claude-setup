@@ -15,6 +15,9 @@ ata el permiso de micrófono a un bundle, así que el watcher se lanza como
   cambia ambos juntos. Las dos copias de `process.py` (`~/.meeting-recorder/`
   y esta del repo) deben quedar idénticas byte a byte tras cualquier cambio.
 - Cómo captura lo decide `MIC_SOURCE` en `bootstrap/machines/<hostname>.env`:
+  - `auto` (default): al arrancar cada grabación revisa si `SwitchAudioSource`
+    ve un dispositivo Corsair conectado y elige `corsair` o `mac` según eso,
+    para no quedarse grabando silencio si el headset se desconectó.
   - `corsair`: Aggregate Device (BlackHole + mic del headset) y salida al
     Multi-Output Device durante la junta.
   - `mac`: solo el micrófono interno, sin tocar la salida. Con bocinas ese
