@@ -56,7 +56,7 @@ hook de PreToolUse usa para ahorrar tokens; se baja de
 [rtk-ai/rtk](https://github.com/rtk-ai/rtk). Es opcional: si falta, el hook falla
 suave y solo pierdes el ahorro.
 
-Las dos versiones fijas no son capricho. El patch de 26 hunks de agent-flow solo
+Las dos versiones fijas no son capricho. El patch de 29 hunks de agent-flow solo
 aplica sobre el `dist/` de 0.9.1, y los navegadores que baja `playwright install`
 tienen que casar con la librería 1.63.0. El bootstrap compara el sha256 de lo
 instalado contra las copias `.pristine` antes de aplicar el patch: si no coinciden,

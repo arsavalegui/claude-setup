@@ -9,6 +9,7 @@
 'use strict';
 const fs = require('fs');
 const path = require('path');
+const { spawn } = require('child_process');
 const { TMP, BASE_PORT, WORKERS, RIG_DIR } = require('./lib/config');
 const { Instance, PKG_DIR, snapshotDist, sleep } = require('./lib/instance');
 const { Sim } = require('./lib/sim');
@@ -126,6 +127,75 @@ async function correrInactivos(casos, ctx) {
   return out;
 }
 
+// ── grupo de inactividad de SESION (resetInactivityTimer + claude_pid) ─────
+// A diferencia de correrInactivos() (staleness de subagentes, timer real de
+// 30 min), esto prueba que la sesion principal no se declare "ended" cuando
+// el proceso claude sigue vivo. Se acorta INACTIVITY_TIMEOUT_MS via la env
+// AGENT_FLOW_INACTIVITY_MS (leida una sola vez al boot de app.js) para correr
+// en segundos en vez de minutos.
+async function correrInactividadSesion(casos, ctx) {
+  if (!casos.length) return [];
+  const TIMEOUT_MS = 3000;
+  const out = [];
+  const prevEnv = process.env.AGENT_FLOW_INACTIVITY_MS;
+  process.env.AGENT_FLOW_INACTIVITY_MS = String(TIMEOUT_MS);
+  try {
+    for (let i = 0; i < casos.length; i++) {
+      const caso = casos[i];
+      const res = { id: caso.id, grupo: caso.grupo, nombre: caso.nombre, dims: caso.dims, score: caso.score, fallas: [], probes: {}, info: {} };
+      let inst = null, pp = null;
+      try {
+        let claudePid = null;
+        if (caso.extra.pidMode === 'vivo') {
+          claudePid = process.pid;   // el propio rig: garantizado vivo durante la corrida
+        } else if (caso.extra.pidMode === 'muerto') {
+          // ponytail: riesgo minimo de reuso de pid por el SO entre la salida
+          // del proceso y el probe (segundos despues); aceptable en un rig.
+          const dead = spawn('true');
+          claudePid = await new Promise((res2) => dead.on('exit', () => res2(dead.pid)));
+        }
+        inst = new Instance({ root: path.join(TMP, `isesion${i}`), port: BASE_PORT + 60 + i, app: ctx.app });
+        await inst.start();
+        pp = await ProbePage.open(ctx.browser, inst.url);
+        const sim = new Sim(inst, { label: `Inactividad sesion ${caso.id}` });
+        await sim.sessionStart({ hookExtra: claudePid ? { claude_pid: claudePid } : {} });
+        await pp.settle((p) => (p.agents || []).length >= 1, 6000);
+
+        await sleep(TIMEOUT_MS * 3 + 3000);   // deja pasar >=2 vueltas del timer acortado
+
+        const p1 = await pp.probe();
+        res.probes.silencio = { sseTipos: p1.sseTypes, agentes: (p1.agents || []).map((a) => `${a.key}=${a.state}`), sesiones: (p1.sessions || []).map((s) => `${s.id}:${s.status}`) };
+        const termino = (p1.sseTypes || []).includes('session-ended');
+        if (termino !== caso.extra.terminaEsperado) {
+          res.fallas.push({ punto: 'silencio', tag: termino ? 'termino-de-mas' : 'no-termino', detalle: `sseTypes=${JSON.stringify(p1.sseTypes)}` });
+        }
+        if (!caso.extra.terminaEsperado) {
+          const main = (p1.agents || []).find((a) => a.isMain);
+          if (!main) res.fallas.push({ punto: 'silencio', tag: 'nodo-faltante', detalle: 'no se ve el nodo principal tras la inactividad' });
+          // reconexion: recarga y confirma que la sesion sigue viva, no "WAITING"
+          await pp.reload();
+          const p2 = await pp.settle((p) => !!p.selected, 6000);
+          res.probes.recarga = { sesion: p2.selected, agentes: (p2.agents || []).map((a) => `${a.key}=${a.state}`) };
+          if (!p2.selected) res.fallas.push({ punto: 'recarga', tag: 'sesion-desconocida', detalle: 'la sesion desaparecio tras recargar' });
+        }
+        if (pp.errors.length) res.fallas.push({ punto: 'pagina', tag: 'pageerror', detalle: pp.errors.slice(0, 3).join(' ; ') });
+      } catch (e) {
+        res.fallas.push({ punto: 'infra', tag: 'infra-error', detalle: String(e.message || e) });
+      } finally {
+        try { if (pp) await pp.close(); } catch {}
+        try { if (inst) await inst.stop(); } catch {}
+        try { if (inst) inst.destroy(); } catch {}
+      }
+      res.ok = res.fallas.length === 0;
+      out.push(res);
+    }
+  } finally {
+    if (prevEnv === undefined) delete process.env.AGENT_FLOW_INACTIVITY_MS;
+    else process.env.AGENT_FLOW_INACTIVITY_MS = prevEnv;
+  }
+  return out;
+}
+
 (async () => {
   fs.mkdirSync(TMP, { recursive: true });
   if (OPTS.distMd5) abortarSiCambio(OPTS.distMd5);
@@ -137,15 +207,17 @@ async function correrInactivos(casos, ctx) {
   if (!OPTS.solo || OPTS.solo === 'matriz') casos.push(...M.matriz({ full: OPTS.full }));
   if (!OPTS.solo || OPTS.solo === 'extras') casos.push(...M.extras());
   const inactivos = (!OPTS.solo || OPTS.solo === 'inactividad') ? M.inactividad() : [];
+  const inactivosSesion = (!OPTS.solo || OPTS.solo === 'inactividad') ? M.inactividadSesion() : [];
   if (OPTS.ids.length) casos = casos.filter((c) => OPTS.ids.includes(c.id));
   if (OPTS.limite) casos = casos.slice(0, OPTS.limite);
 
-  console.log(`casos: ${casos.length} en paralelo (${OPTS.workers} workers) + ${inactivos.length} de inactividad`);
+  console.log(`casos: ${casos.length} en paralelo (${OPTS.workers} workers) + ${inactivos.length} de inactividad + ${inactivosSesion.length} de inactividad de sesion`);
   const browser = await launchBrowser();
   const ctx = { app: OPTS.app || snap.app, browser };
   const resultados = [];
   const t0 = Date.now();
 
+  if (inactivosSesion.length) resultados.push(...await correrInactividadSesion(inactivosSesion, ctx));
   if (inactivos.length) resultados.push(...await correrInactivos(inactivos, ctx));
   const tMatriz = Date.now();   // el ETA no debe cargar con los 6 min de inactividad
 

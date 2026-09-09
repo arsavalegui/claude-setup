@@ -1,0 +1,14 @@
+dist a3135d31fced509c435716e48ef99b5c  macOS D99MFVLWP6  2026-09-09
+casos: 473   pasados: 473   fallados: 0
+
+grupo                 total   pasados   fallados
+inactividad               7         7          0
+matriz                  450       450          0
+extra                    16        16          0
+
+causa                      casos  puntos                     escenario minimo que lo reproduce
+
+informativo: la pestana abierta se recupero sola tras reiniciar el servidor en 465/465 casos
+
+resultados: /tmp/rig-full-a3135d31.json
+RIG EXIT=0

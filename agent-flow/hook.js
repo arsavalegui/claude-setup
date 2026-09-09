@@ -59,15 +59,22 @@ function rememberDelegation(toolInput) {
   try { fs.writeFileSync(PENDING_FILE, JSON.stringify(pending)); } catch {}
 }
 
-// Returns the body to send to agent-flow: unchanged unless `agent_type` is
+// Returns the body to send to agent-flow: unchanged unless (a) `agent_type` is
 // actually a name/description we saw at delegation time, in which case it's
-// rewritten to "<real type> · <name>" so the UI shows both.
+// rewritten to "<real type> · <name>" so the UI shows both, and/or (b) we can
+// attach `claude_pid` — the PID of the `claude` process owning this session,
+// used by agent-flow to tell a merely-idle session from one whose process is
+// actually gone. Claude Code spawns command hooks directly as children of
+// itself (verified empirically: no intermediate shell), so process.ppid IS
+// that PID.
 function enrichedBody(payload, raw) {
   const atype = (payload.agent_type || '').trim();
-  if (!atype) return raw;
-  const realType = loadPending()[atype];
-  if (!realType || realType === atype) return raw;
-  return JSON.stringify({ ...payload, agent_type: `${realType} · ${atype}` });
+  const realType = atype && loadPending()[atype];
+  const patch = {};
+  if (realType && realType !== atype) patch.agent_type = `${realType} · ${atype}`;
+  if (!payload.claude_pid && process.ppid > 1) patch.claude_pid = process.ppid;
+  if (Object.keys(patch).length === 0) return raw;
+  return JSON.stringify({ ...payload, ...patch });
 }
 
 const { execFileSync } = require('child_process');

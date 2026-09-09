@@ -101,7 +101,7 @@ have claude || warn "el CLI 'claude' no está en el PATH todavía; se instala en
 # ---------- 2. paquetes npm globales ----------
 step "2. Paquetes npm globales"
 # Versiones fijas donde importa. agent-flow-app y playwright van pineados a
-# propósito: el patch de 26 hunks solo aplica sobre 0.9.1, y los navegadores que
+# propósito: el patch de 29 hunks solo aplica sobre 0.9.1, y los navegadores que
 # baja `playwright install` tienen que casar con la librería 1.63.0.
 NPM_PKGS=(
   "@anthropic-ai/claude-code@latest"

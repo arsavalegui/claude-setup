@@ -73,9 +73,9 @@ class Sim {
   }
 
   // ── ciclo de vida de la sesion ──────────────────────────────────────────
-  async sessionStart({ withHook = true } = {}) {
+  async sessionStart({ withHook = true, hookExtra = {} } = {}) {
     this.mainLine({ type: 'user', message: { role: 'user', content: this.label } });
-    if (withHook) await this.hook('SessionStart', { source: 'startup' });
+    if (withHook) await this.hook('SessionStart', { source: 'startup', ...hookExtra });
     return this;
   }
 

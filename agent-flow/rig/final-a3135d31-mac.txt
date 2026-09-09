@@ -1,0 +1,36 @@
+dist congelado para esta corrida: {"dist/app.js":"a3135d31fced509c435716e48ef99b5c","dist/webview/index.js":"d892e50e6c446277460b7e95b844e12f","dist/webview/index.css":"2d3956d56f397aaa9abb6b7418512664"}
+casos: 466 en paralelo (6 workers) + 4 de inactividad + 3 de inactividad de sesion
+[inactividad] 4 instancias arriba; esperando 6 min de silencio...
+[25/466] m0027 named-type/solo-end-turn/hook-primero/cwd-subdir/reinicio-a-la-mitad OK ok (8170ms, faltan ~719s)
+[50/466] m0050 named-type/muerto-a-media-tool/hook-primero/segunda-nueva/normal OK ok (10191ms, faltan ~633s)
+[75/466] m0074 named-type/muerto-tras-entregar/meta-tarde/segunda-nueva/recarga-a-la-mitad OK ok (12838ms, faltan ~659s)
+[100/466] m0101 named-sin-enriquecer/solo-end-turn/archivo-primero/pausa-reanuda/normal OK ok (9494ms, faltan ~600s)
+[125/466] m0125 named-sin-enriquecer/muerto-a-media-tool/hook-primero/segunda-nueva/normal OK ok (10164ms, faltan ~543s)
+[150/466] m0148 named-sin-enriquecer/muerto-tras-entregar/hook-primero/pausa-reanuda/reinicio-a-la-mitad OK ok (14837ms, faltan ~523s)
+[175/466] m0177 named-sin-type/solo-end-turn/hook-primero/cwd-subdir/reinicio-a-la-mitad OK ok (8013ms, faltan ~476s)
+[200/466] m0200 named-sin-type/muerto-a-media-tool/hook-primero/segunda-nueva/normal OK ok (10228ms, faltan ~428s)
+[225/466] m0224 named-sin-type/muerto-tras-entregar/meta-tarde/segunda-nueva/recarga-a-la-mitad OK ok (12018ms, faltan ~397s)
+[250/466] m0252 sin-name/solo-end-turn/hook-primero/cwd-subdir/reinicio-a-la-mitad OK ok (8055ms, faltan ~354s)
+[275/466] m0275 sin-name/muerto-a-media-tool/hook-primero/segunda-nueva/normal OK ok (10115ms, faltan ~309s)
+[300/466] m0301 builtin/subagentstop/archivo-primero/una/normal OK ok (6470ms, faltan ~274s)
+[325/466] m0327 builtin/solo-end-turn/hook-primero/cwd-subdir/reinicio-a-la-mitad OK ok (7850ms, faltan ~232s)
+[350/466] m0350 builtin/muerto-a-media-tool/hook-primero/segunda-nueva/normal OK ok (10130ms, faltan ~189s)
+[375/466] m0376 anidado/subagentstop/archivo-primero/una/normal OK ok (6974ms, faltan ~151s)
+[400/466] m0398 anidado/solo-end-turn/meta-tarde/cwd-subdir/normal OK ok (14928ms, faltan ~110s)
+[425/466] m0425 anidado/muerto-a-media-tool/hook-primero/segunda-nueva/normal OK ok (11373ms, faltan ~68s)
+[450/466] x002 named-type/muerto-tras-entregar/archivo-primero/una/normal OK ok (10050ms, faltan ~27s)
+
+casos: 473   pasados: 473   fallados: 0
+
+grupo                 total   pasados   fallados
+inactividad               7         7          0
+matriz                  450       450          0
+extra                    16        16          0
+
+causa                      casos  puntos                     escenario minimo que lo reproduce
+
+informativo: la pestana abierta se recupero sola tras reiniciar el servidor en 465/465 casos
+
+resultados: /tmp/rig-full-a3135d31.json
+
+RIG EXIT=0

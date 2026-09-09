@@ -120,4 +120,26 @@ function inactividad() {
   return casos;
 }
 
-module.exports = { matriz, extras, inactividad, TIPOS, CIERRES, ORDENES, SESIONES, SERVIDOR, DEFAULTS, score };
+/**
+ * Casos de persistencia de la sesion principal ante inactividad: a diferencia
+ * de inactividad() (staleness de subagentes, timer real de 30 min que no se
+ * puede acortar), estos prueban resetInactivityTimer/claude_pid via la env
+ * AGENT_FLOW_INACTIVITY_MS acortada — corren en segundos, no en minutos.
+ * pidMode: 'vivo' (pid real, ej. el propio proceso del rig) | 'muerto' (pid de
+ * un proceso ya salido) | 'sin-pid' (nunca se manda claude_pid, comportamiento
+ * de antes).
+ */
+function inactividadSesion() {
+  const casos = [];
+  const dimsBase = { tipo: '-', cierre: '-', orden: '-', sesion: '-', servidor: '-' };
+  const push = (nombre, pidMode, terminaEsperado) => casos.push({
+    id: `is${String(casos.length + 1).padStart(3, '0')}`, grupo: 'inactividad', nombre,
+    dims: { ...dimsBase, tipo: `sesion-${pidMode}` }, extra: { pidMode, terminaEsperado }, score: 1,
+  });
+  push('sesion inactiva con claude_pid vivo: no debe terminar', 'vivo', false);
+  push('sesion inactiva con claude_pid muerto: debe terminar', 'muerto', true);
+  push('sesion inactiva sin claude_pid: debe terminar (comportamiento previo)', 'sin-pid', true);
+  return casos;
+}
+
+module.exports = { matriz, extras, inactividad, inactividadSesion, TIPOS, CIERRES, ORDENES, SESIONES, SERVIDOR, DEFAULTS, score };

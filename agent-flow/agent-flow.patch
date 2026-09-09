@@ -1,16 +1,18 @@
---- a/dist/app.js
-+++ b/dist/app.js
-@@ -280,7 +280,8 @@
+--- a/dist/app.js	2026-09-09 03:27:37
++++ b/dist/app.js	2026-09-09 03:27:37
+@@ -280,7 +280,10 @@
  });
  
  // extension/src/constants.ts
 -var INACTIVITY_TIMEOUT_MS = 5 * 60 * 1e3;
-+var INACTIVITY_TIMEOUT_MS = 30 * 60 * 1e3;
++// ponytail: override solo para el rig (acortar 30 min sería absurdo en prod);
++// sin la env var, comportamiento idéntico al de siempre.
++var INACTIVITY_TIMEOUT_MS = Number(process.env.AGENT_FLOW_INACTIVITY_MS) || 30 * 60 * 1e3;
 +var SESSION_RETENTION_MS = 24 * 60 * 60 * 1e3;
  var SCAN_INTERVAL_MS = 1e3;
  var POLL_FALLBACK_MS = 3e3;
  var PERMISSION_DETECT_MS = 5e3;
-@@ -323,7 +324,90 @@
+@@ -323,8 +326,91 @@
    return `subagent-${id.length > SUBAGENT_ID_SUFFIX_LENGTH ? id.slice(-SUBAGENT_ID_SUFFIX_LENGTH) : index}`;
  }
  function resolveSubagentChildName(input) {
@@ -92,17 +94,31 @@
 +        return st.agentName;
 +  }
 +  return null;
-+}
+ }
 +var SUBAGENT_NAME_CACHE_MAX = 500;
 +// ponytail: clearSessionState() quedó sin llamadores y los spawns en background nunca
 +// borran su entrada; un tope acotado evita que los Maps crezcan por toda la vida del proceso.
 +function capMap(map, max) {
 +  for (const k of [...map.keys()].slice(0, map.size - max))
 +    map.delete(k);
- }
++}
  var SYSTEM_CONTENT_PREFIXES = [
    "This session is being continued",
-@@ -796,7 +880,9 @@
+   "<ide_",
+@@ -753,6 +839,12 @@
+   handleHook(payload) {
+     const eventName = payload.hook_event_name;
+     log.debug(eventName, payload.tool_name || payload.agent_type || "");
++    // ponytail: un solo choke point para capturar claude_pid, sea cual sea el
++    // evento; el timer de inactividad lo consulta por sessionId sin acoplarse
++    // al orden en que llegan SessionStart vs los demás hooks.
++    if (typeof payload.claude_pid === "number" && payload.session_id) {
++      claudePidBySession.set(payload.session_id, payload.claude_pid);
++    }
+     switch (eventName) {
+       case "SessionStart":
+         this.handleSessionStart(payload);
+@@ -796,7 +888,9 @@
      }, payload.session_id);
    }
    handlePreToolUse(payload) {
@@ -113,7 +129,7 @@
      const toolName = payload.tool_name || "unknown";
      const args2 = summarizeInput(toolName, payload.tool_input);
      if (!this.sessionState.has(payload.session_id)) {
-@@ -814,7 +900,9 @@
+@@ -814,7 +908,9 @@
      }, payload.session_id);
    }
    handlePostToolUse(payload) {
@@ -124,7 +140,7 @@
      const toolName = payload.tool_name || "unknown";
      const result = payload.tool_response ? summarizeResult(payload.tool_response) : "";
      const tokenCost = estimateTokenCost(toolName, result);
-@@ -832,7 +920,9 @@
+@@ -832,7 +928,9 @@
      }, payload.session_id);
    }
    handlePostToolUseFailure(payload) {
@@ -135,7 +151,7 @@
      const toolName = payload.tool_name || "unknown";
      this.emit({
        time: this.elapsedSeconds(payload.session_id),
-@@ -845,17 +935,48 @@
+@@ -845,17 +943,48 @@
        }
      }, payload.session_id);
    }
@@ -191,7 +207,7 @@
      const parentName = this.resolveAgentName(payload);
      this.emit({
        time: this.elapsedSeconds(payload.session_id),
-@@ -882,6 +1003,31 @@
+@@ -882,6 +1011,31 @@
      }, payload.session_id);
    }
    handleStop(payload) {
@@ -223,7 +239,7 @@
      this.emit({
        time: this.elapsedSeconds(payload.session_id),
        type: "agent_complete",
-@@ -895,13 +1041,15 @@
+@@ -895,13 +1049,15 @@
        payload: { name: ORCHESTRATOR_NAME, sessionEnd: true }
      }, payload.session_id);
      this.sessionState.delete(payload.session_id);
@@ -242,7 +258,7 @@
      }
      return ORCHESTRATOR_NAME;
    }
-@@ -920,6 +1068,7 @@
+@@ -920,6 +1076,7 @@
  
  // extension/src/protocol.ts
  function emitSubagentSpawn(emitter, parent, child, task, sessionId) {
@@ -250,7 +266,7 @@
    emitter.emit({
      time: emitter.elapsed(sessionId),
      type: "subagent_dispatch",
-@@ -1159,6 +1308,7 @@
+@@ -1159,6 +1316,7 @@
      if (toolName === "Task" || toolName === "Agent") {
        const childName = resolveSubagentChildName(block.input);
        this.subagentChildNames.set(block.id, childName);
@@ -258,7 +274,7 @@
        const session = sessionId ? this.delegate.getSession(sessionId) : void 0;
        if (!session?.spawnedSubagents.has(childName)) {
          session?.spawnedSubagents.add(childName);
-@@ -1197,7 +1347,10 @@
+@@ -1197,7 +1355,10 @@
      }
      ctxPending.delete(block.tool_use_id);
      const discovery = buildDiscovery(toolName, pending?.filePath || "", result);
@@ -270,7 +286,7 @@
        const childName = this.subagentChildNames.get(block.tool_use_id) || pending?.args?.slice(0, CHILD_NAME_MAX) || "subagent";
        this.subagentChildNames.delete(block.tool_use_id);
        this.inlineSubagentState.delete(block.tool_use_id);
-@@ -1261,6 +1414,7 @@
+@@ -1261,6 +1422,7 @@
          seenMessages: /* @__PURE__ */ new Set()
        };
        this.inlineSubagentState.set(parentToolUseID, subState);
@@ -278,7 +294,7 @@
        if (sessionId) {
          const session = this.delegate.getSession(sessionId);
          session?.inlineProgressAgents.add(childName);
-@@ -1297,6 +1451,7 @@
+@@ -1297,6 +1459,7 @@
                    const childName = resolveSubagentChildName(toolBlock.input);
                    session.spawnedSubagents.add(childName);
                    this.subagentChildNames.set(toolBlock.id, childName);
@@ -286,7 +302,7 @@
                  }
                  const args2 = summarizeInput(toolBlock.name, toolBlock.input);
                  const rawPath = toolBlock.input.file_path || toolBlock.input.path;
-@@ -1561,26 +1716,105 @@
+@@ -1561,26 +1724,105 @@
      log3.debug("Subagent dir scan failed:", err);
    }
  }
@@ -395,7 +411,7 @@
      if (stat.size > 0) {
        const content = fs2.readFileSync(filePath, "utf-8");
        for (const line of content.split(/\r?\n/)) {
-@@ -1598,6 +1832,8 @@
+@@ -1598,6 +1840,8 @@
                  pendingToolUseIds.delete(block.tool_use_id);
                }
              }
@@ -404,7 +420,7 @@
            }
          } catch {
          }
-@@ -1607,11 +1843,61 @@
+@@ -1607,11 +1851,61 @@
    } catch (err) {
      log3.debug("Subagent initial read failed:", err);
    }
@@ -471,7 +487,7 @@
    }
    try {
      state.watcher = fs2.watch(filePath, () => {
-@@ -1628,25 +1914,78 @@
+@@ -1628,25 +1922,78 @@
    const state = session.subagentWatchers.get(filePath);
    if (!state)
      return;
@@ -552,7 +568,29 @@
    delegate.resetInactivityTimer(sessionId);
  }
  
-@@ -2547,6 +2886,27 @@
+@@ -2512,6 +2859,21 @@
+   }
+ }
+ var sessions = /* @__PURE__ */ new Map();
++// ponytail: pid del proceso `claude` dueño de cada sesión (visto en los hooks
++// vía hook.js, campo claude_pid); Map propio porque llega desde HookServer
++// (arriba en el bundle) antes de que exista la entrada en `sessions`.
++var claudePidBySession = /* @__PURE__ */ new Map();
++function isClaudeProcessAlive(sessionId) {
++  const pid = claudePidBySession.get(sessionId);
++  if (!pid)
++    return false;
++  try {
++    process.kill(pid, 0);
++    return true;
++  } catch {
++    return false;
++  }
++}
+ function elapsed(sessionId) {
+   if (sessionId) {
+     const session = sessions.get(sessionId);
+@@ -2547,6 +2909,28 @@
    getLastActivityTime: (sessionId) => sessions.get(sessionId)?.lastActivityTime,
    resetInactivityTimer: (sessionId) => resetInactivityTimer(sessionId)
  };
@@ -574,13 +612,33 @@
 +      clearTimeout(s.inactivityTimer);
 +    sessions.delete(id);
 +    eventBuffer.delete(id);
++    claudePidBySession.delete(id);
 +    log6(`[session] ${id.slice(0, SESSION_ID_DISPLAY)} podada (completada hace >24h)`);
 +  }
 +}
  function resetInactivityTimer(sessionId) {
    const session = sessions.get(sessionId);
    if (!session)
-@@ -2577,6 +2937,7 @@
+@@ -2565,8 +2949,17 @@
+   }
+   if (session.inactivityTimer)
+     clearTimeout(session.inactivityTimer);
+-  session.inactivityTimer = setTimeout(() => {
++  session.inactivityTimer = setTimeout(function tick() {
+     if (!session.sessionCompleted && session.sessionDetected) {
++      if (isClaudeProcessAlive(sessionId)) {
++        // ponytail: el proceso claude sigue vivo (ausencia prolongada del
++        // usuario, no fin de sesión) — no declarar "ended", solo reprogramar.
++        // Solo termina por SessionEnd real o por pid muerto/desconocido.
++        log6(`[session] ${sessionId.slice(0, SESSION_ID_DISPLAY)} inactive but claude_pid alive, keeping session`);
++        session.inactivityTimer = setTimeout(tick, INACTIVITY_TIMEOUT_MS);
++        podarSesionesViejas();
++        return;
++      }
+       log6(`[session] ${sessionId.slice(0, SESSION_ID_DISPLAY)} inactive`);
+       session.sessionCompleted = true;
+       broadcastEvent({
+@@ -2577,6 +2970,7 @@
        });
        broadcastSessionLifecycle("ended", sessionId, session.label);
      }
@@ -588,7 +646,7 @@
    }, INACTIVITY_TIMEOUT_MS);
  }
  function watchSession(sessionId, filePath) {
-@@ -2597,6 +2958,13 @@
+@@ -2597,6 +2991,13 @@
      inactivityTimer: null,
      subagentWatchers: /* @__PURE__ */ new Map(),
      spawnedSubagents: /* @__PURE__ */ new Set(),
@@ -602,7 +660,7 @@
      inlineProgressAgents: /* @__PURE__ */ new Set(),
      subagentsDirWatcher: null,
      subagentsDir: null,
-@@ -2664,12 +3032,25 @@
+@@ -2664,12 +3065,25 @@
    const encoded = resolved.replace(/[^a-zA-Z0-9]/g, "-");
    const dirsToScan = [];
    const encodedFolded = foldPathCase(encoded);
@@ -629,7 +687,7 @@
          dirsToScan.push(path3.join(CLAUDE_DIR, dir.name));
        }
      }
-@@ -2765,7 +3146,9 @@
+@@ -2765,7 +3179,9 @@
        throw new Error("Failed to start hook server (port in use)");
      }
      hookServer.onEvent((event) => {
@@ -640,7 +698,7 @@
      });
      writeDiscoveryFile(hookPort, workspace);
      scanForActiveSessions(workspace);
-@@ -2832,7 +3215,22 @@
+@@ -2832,7 +3248,22 @@
        });
        sseClients.add(res);
        log6(`[sse] Client connected (${sseClients.size} total)`);
@@ -663,7 +721,7 @@
          sseClients.delete(res);
          log6(`[sse] Client disconnected (${sseClients.size} total)`);
        });
-@@ -2853,6 +3251,10 @@
+@@ -2853,6 +3284,10 @@
        if (sessionList.length > 0) {
          sendSSE(res, { type: "session-list", sessions: sessionList });
        }
@@ -674,7 +732,7 @@
        const sorted = [...sessionList].sort((a, b) => {
          const aActive = a.status === "active" ? 1 : 0;
          const bActive = b.status === "active" ? 1 : 0;
-@@ -2860,9 +3262,10 @@
+@@ -2860,9 +3295,10 @@
            return bActive - aActive;
          return b.lastActivityTime - a.lastActivityTime;
        });
@@ -688,8 +746,8 @@
            sendSSE(res, { type: "agent-event-batch", events: buffered });
          }
        }
---- a/dist/webview/index.js
-+++ b/dist/webview/index.js
+--- a/dist/webview/index.js	2026-09-09 03:27:37
++++ b/dist/webview/index.js	2026-09-09 03:27:37
 @@ -34,7 +34,7 @@
  Tests: 18 passed, 18 total
  Coverage: 91.3% stmts, 87.2% branches`,tokenCost:400,discovery:{type:`finding`,label:`All 18 tests pass`,content:`18/18 tests passing
