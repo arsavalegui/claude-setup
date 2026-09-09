@@ -7,6 +7,13 @@ ata el permiso de micrófono a un bundle, así que el watcher se lanza como
 
 - `watcher.py` detecta Teams/Zoom/Slack en llamada, graba con ffmpeg y entrega
   el wav a `process.py` (whisper-cli + `claude -p` -> nota en `~/Notes/Meetings/`).
+- La estructura de la nota (Context/Points discussed/Decisions/Action
+  items/Open questions/Related notes) vive en un solo archivo,
+  `../meeting-note-template.md`, que `process.py` carga en cada corrida (con
+  fallback embebido si el archivo falta). `mic-meeting-recorder` en Linux
+  lleva las mismas secciones en español dentro de `CLAUDE_SYSTEM_PROMPT`;
+  cambia ambos juntos. Las dos copias de `process.py` (`~/.meeting-recorder/`
+  y esta del repo) deben quedar idénticas byte a byte tras cualquier cambio.
 - Cómo captura lo decide `MIC_SOURCE` en `bootstrap/machines/<hostname>.env`:
   - `corsair`: Aggregate Device (BlackHole + mic del headset) y salida al
     Multi-Output Device durante la junta.

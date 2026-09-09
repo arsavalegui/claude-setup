@@ -49,3 +49,4 @@
 - [Separación de roles entre agentes](feedback_agent_role_separation.md) — quien escribe el código nunca lo revisa; usar aura-reviewer antes de cada MR.
 - [Divergencia de branch en aura](project_aura_branch_divergence.md) — feature/8767-cache-consolidation revierte el guard AURA_ENV de dev; rebasar antes de mergear.
 - [claude-setup en esta Mac](project_claude_setup_mac.md) — ~/.claude es clon de github.com/arsavalegui/claude-setup; qué falta commitear y cómo sincronizar.
+- [Plantilla de notas de juntas](feedback_meeting_note_template.md) — Siempre la plantilla única de claude-setup (`bootstrap/tools/meeting-note-template.md`): puntos discutidos + decisiones + action items con checkbox + wikilinks; Mac y Linux comparten estructura

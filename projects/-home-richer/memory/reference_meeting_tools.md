@@ -60,3 +60,10 @@ systemctl --user status voxtype
 journalctl --user -u mic-meeting-recorder -f
 journalctl --user -u voxtype -f
 ```
+
+## 3. Recorder de la Mac del trabajo (D99MFVLWP6)
+
+- Vive en `~/.meeting-recorder/` (`watcher.py`, `detect.py`, `process.py`), lanzado como `~/Applications/MeetingRecorder.app` por el plist `com.alan.meeting-recorder.launcher`; copia de referencia en `~/.claude/bootstrap/tools/meeting-recorder-mac/` (debe quedar idéntica a la viva).
+- Pipeline: detecta Teams/Zoom/Slack, graba wav (Aggregate Device BlackHole + mic Corsair), `whisper-cli` con `~/.whisper-models/ggml-small.bin`, `claude -p`, nota + transcript en `~/Notes/Meetings/` (`YYYY-MM-DD HH-MM Título.md` y `... (transcript).md`), borra el wav.
+- Logs: `~/.meeting-recorder/logs/{watcher,process}.log`. Un standup de 31 min tarda ~5-10 min en transcribir.
+- La estructura de la nota sale de `~/.claude/bootstrap/tools/meeting-note-template.md` (plantilla única, ver [[feedback-meeting-note-template]]); Linux lleva las mismas secciones en español dentro de `CLAUDE_SYSTEM_PROMPT`.

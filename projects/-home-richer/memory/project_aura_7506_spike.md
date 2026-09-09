@@ -5,7 +5,7 @@ metadata:
   node_type: memory
   type: project
   originSessionId: 9e31707f-d450-49bb-8159-b31020d47f24
-  modified: 2026-09-03T16:07:46.769Z
+  modified: 2026-09-08T14:41:54.000Z
 ---
 
 Alan participa en el proyecto **AURA** (asistente de IA con permisos por rol/use-case; cliente Stryker, org GitLab `strykercorp/it/ai-office/...`). Compañeros: **Yeison/Jason** (dev), **Gavin** (lead). Alan entró por su experiencia en Terraform + data engineering.
@@ -110,4 +110,12 @@ Relacionado: [[reference-meeting-transcription]] [[reference-local-tooling]] [[u
 - Ahmar sigue sin contestar sobre la zona `privatelink.redis.cache.windows.net` / egress.
 - **Egress medido 2026-09-08 desde el Console del container (`portquiz.net`):** 6379 BLOCKED, 6380 BLOCKED, **10000 BLOCKED**, 443 OPEN (y 10255 Cosmos abierto desde el 3-sep). Conclusión: Managed Redis público en 10000 tampoco llega; el filtro es allowlist por puerto de plataforma. Camino corto para el experimento: pedir a Ahmar regla de egress al Redis actual (IP pública, 6380) o private endpoint. Los benchmarks se corren SIEMPRE desde el Console del container, no desde la Mac (regla de Alan).
 - **Docs oficiales verificadas 2026-09-08 (Managed Redis):** Entra auth https://learn.microsoft.com/en-us/azure/redis/entra-for-authentication ; Python + `redis-entraid` (así, sin guion antes de id) https://learn.microsoft.com/en-us/azure/redis/python-get-started , https://github.com/redis/redis-py-entraid ; retiro Azure Cache for Redis 2028-09-30 (Basic/Standard/Premium) https://learn.microsoft.com/en-us/azure/azure-cache-for-redis/retirement-faq ; private link + puerto 10000 https://learn.microsoft.com/en-us/azure/redis/private-link ; Terraform `azurerm_managed_redis` y `..._access_policy_assignment` en registry.terraform.io ; identidad en Container Apps https://learn.microsoft.com/en-us/azure/container-apps/managed-identity .
+
+**ESTADO 2026-09-08 tarde — opción B implementada, SIN commit/push (orden de Alan: revisar en verde primero):**
+- Ahmar eligió **opción B** (Entra ID desde el inicio, backend e IaC van de la mano). Egress al puerto 10000 sigue sin respuesta; se ve después de deployar.
+- **aura-iac** en `feature/8767-aura-env-scr` (misma branch del MR !33), 12 archivos modificados sin commit: `redis.tf` (azurerm_managed_redis + access policy assignment, `local.redis_keys_count`), `container-app.tf` (`REDIS_USE_MANAGED_IDENTITY`, `versionless_id`), `key-vault.tf`, `variables.tf` (`redis_access_keys_enabled` default false), `outputs.tf`, DEV/QA/SCR main+vars (SCR `var.cache_mode`, default `local`), `.gitlab-ci.yml` (`AURA_CACHE_MODE` default local). 4 roots `terraform validate` OK; revisor independiente: ship. Falta rebase sobre origin/main (e550a19) antes de pushear a !33.
+- **aura** en `feature/8767-redis-entra-auth` (desde origin/main 780690c), 5 archivos sin commit: `cache_backends.py` (`ManagedIdentityCredentialProvider` síncrono con `DefaultAzureCredential(connection_timeout=5, read_timeout=5, retry_total=0)` en constructor, oid del JWT, `AuthenticationError` en fallas, refresh margen 300 s que sigue sirviendo token válido), `speech.py` (`asyncio.to_thread` para `validate_user_access`), `.env.example`, `tests/test_cache_backends.py`, `tests/test_speech_routes.py`. `redis-entraid` descartado (deadlock en event loop). ruff limpio, **358 passed, 1 skipped**; revisor independiente: ship.
+- Orden de aplicación acordado: primero MR del backend, luego IaC (!33). Luego egress/private endpoint con Ahmar, flip `AURA_CACHE_MODE` a hybrid, benchmarks desde el Console del container.
+- Inventario de tests: `~/Downloads/aura_cache_backends_tests_2026-09-08.xlsx`.
+- **Standup 2026-09-08 08:31 (nota en `~/Notes/Meetings/2026-09-08 08-31 AURA standup Redis port blocker, prompt hub.md`):** Ahmar es dueño de la regla de red (egress o private link) en common platform y la hace DESPUÉS del deploy del nuevo cache. Pide dos cosas a Alan: (1) pushear el MR de IaC con la instancia nueva de Redis (!33) para revisarlo; (2) reproducir y mandarle la versión NUEVA del error de red contra el Managed Redis (puerto 10000) antes de tocar subnet/NSG. Regla del equipo: TODO MR en `aura` debe agregar entrada al `CHANGELOG.md` (`## [Unreleased]` → `### Added`/`### Changed`), el job KACL del pipeline falla si no; `aura-iac` no tiene changelog. Entrada ya agregada en el working tree de `aura`.
 

@@ -49,7 +49,59 @@ logging.basicConfig(
 )
 log = logging.getLogger("process")
 
-PROMPT = """You are writing a meeting note for Alan, a data engineer at Slalom \
+# Shared with the Linux recorder: same sections, in Spanish, embedded in
+# mic-meeting-recorder's CLAUDE_SYSTEM_PROMPT. Change both together.
+TEMPLATE_PATH = HOME / ".claude" / "bootstrap" / "tools" / "meeting-note-template.md"
+
+# Used only if the file above is missing, so a note is never lost over a
+# missing file. Keep this in sync with meeting-note-template.md by hand.
+TEMPLATE_FALLBACK = """\
+## Context
+One short paragraph: what the meeting was actually about, participants if named.
+
+## Points discussed
+- Point 1
+- Point 2
+- Point 3
+
+## Decisions
+- Decision 1 (or "None" if nothing was decided)
+
+## Action items
+- [ ] Owner — what (Alan's items first). "None" if there are none.
+
+## Open questions
+- Question 1 (omit this section if there are none)
+
+## Related notes
+- [[wikilink]] to an existing vault note (omit this section if none apply)
+
+Rules that matter:
+- Only what the transcript supports. Never invent an item to fill a section; an empty section is information too.
+- Attribute something to a person only when the transcript makes it clear.
+- No emojis, anywhere.
+- Keep it short. This note gets re-read; a wall of text does not.
+- Output Markdown only, starting at "## Context". No preamble, no code fences."""
+
+
+def load_template() -> str:
+    """Read the shared note structure, embedded fallback if the file is gone."""
+    try:
+        text = TEMPLATE_PATH.read_text()
+    except OSError:
+        log.warning("Template missing at %s, using the embedded fallback", TEMPLATE_PATH)
+        return TEMPLATE_FALLBACK
+    # Strip the leading HTML comment: it documents the file for humans, not for
+    # the model reading the prompt.
+    body = re.sub(r"^<!--.*?-->\s*", "", text, flags=re.DOTALL).strip()
+    if body != TEMPLATE_FALLBACK:
+        log.warning("Template file and embedded fallback differ; keep them in sync")
+    return body
+
+
+# Persona and transcript caveats, module-level so write_up() can reuse it if
+# build_prompt() blows up building the rest of the prompt.
+PERSONA = """You are writing a meeting note for Alan, a data engineer at Slalom \
 working on the AURA project for Stryker and involved in Slalom's Innovation Lab. \
 Below is an automatic transcript. It is imperfect: the meeting mixes Spanish and \
 English, names are often mangled, and some lines are wrong.
@@ -63,32 +115,19 @@ meeting was actually about. Three to seven words, no date, no the word \
 "meeting". "Redis bake-off review with Ahmar" is useful; "Team sync" is not. If \
 the transcript is too garbled to tell, use "Unclear - check transcript".
 
-Then a blank line, then the note in English, in Markdown, in this shape:
+Then a blank line, then the note in English, in Markdown, in this shape:"""
 
-## Summary
-Two or three sentences. What was this meeting actually about?
 
-## Decisions
-What was decided. Omit the section if nothing was.
-
-## Action items
-Who owes what. Mark Alan's own items clearly. Omit if there are none.
-
-## Open questions
-What was raised and left unresolved. Omit if there are none.
-
-## Mentioned
-People, tickets, systems and repos that came up, as a plain list.
-
-Rules that matter:
-- Only what the transcript supports. Do not invent an action item to fill a \
-section; an empty section is information too.
-- If the transcript is too garbled to tell what happened, say so plainly instead \
-of guessing.
-- Attribute something to a person only when the transcript makes it clear.
-- Keep it short. This note gets re-read; a wall of text does not.
-
-Output the Markdown only. No preamble."""
+def build_prompt() -> str:
+    """Persona and transcript caveats, then the shared template, then the vault's
+    actual notes so a wikilink never points at something that does not exist."""
+    vault_notes = sorted(p.stem for p in VAULT.glob("*.md"))
+    allowed_links = (
+        'The only notes that already exist in the vault, and so the only valid '
+        'wikilink targets for "Related notes", are: '
+        + (", ".join(vault_notes) if vault_notes else "(none yet)")
+    )
+    return f"{PERSONA}\n\n{load_template()}\n\n{allowed_links}"
 
 
 def transcribe(wav: Path) -> str | None:
@@ -128,8 +167,18 @@ def transcribe(wav: Path) -> str | None:
 
 def write_up(transcript: str) -> str | None:
     log.info("Asking Claude for the write-up")
+    try:
+        prompt = build_prompt()
+    except Exception:
+        # A broken template file or vault listing must not cost the transcript:
+        # fall back to the embedded skeleton with no wikilink targets.
+        log.exception("build_prompt failed, falling back to the embedded template")
+        prompt = (
+            f"{PERSONA}\n\n{TEMPLATE_FALLBACK}\n\n"
+            'No vault notes could be listed; omit "Related notes".'
+        )
     result = subprocess.run(
-        ["claude", "-p", PROMPT],
+        ["claude", "-p", prompt],
         input=transcript,
         capture_output=True,
         text=True,
@@ -188,12 +237,17 @@ def save(note: str, when: datetime, title: str, app: str, minutes: str, transcri
     path = NOTES / f"{stem}.md"
 
     front = [
-        f"# {stem}",
+        "---",
+        "tags: [meeting, auto-transcript]",
+        f"date: {when.strftime('%Y-%m-%d')}",
+        f'time: "{when.strftime("%H:%M")}"',
+        f"duration_min: {int(minutes)}",
+        f"source: {app}",
+        f'transcript: "[[{transcript_link}]]"',
+        "auto_transcript: true",
+        "---",
         "",
-        f"**When:** {when.strftime('%A %d %B %Y, %H:%M')}  ",
-        f"**Duration:** {minutes} min  ",
-        f"**Source:** {app}  ",
-        f"**Transcript:** [[{transcript_link}]]",
+        f"# {stem}",
         "",
         "Written up automatically from an imperfect transcript. Check the "
         "transcript before acting on anything that matters.",
