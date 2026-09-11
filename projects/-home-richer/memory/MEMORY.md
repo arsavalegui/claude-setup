@@ -50,3 +50,4 @@
 - [Divergencia de branch en aura](project_aura_branch_divergence.md) — feature/8767-cache-consolidation revierte el guard AURA_ENV de dev; rebasar antes de mergear.
 - [claude-setup en esta Mac](project_claude_setup_mac.md) — ~/.claude es clon de github.com/arsavalegui/claude-setup; qué falta commitear y cómo sincronizar.
 - [Plantilla de notas de juntas](feedback_meeting_note_template.md) — Siempre la plantilla única de claude-setup (`bootstrap/tools/meeting-note-template.md`): puntos discutidos + decisiones + action items con checkbox + wikilinks; Mac y Linux comparten estructura
+- [Innovation Lab FHIR IaC](project_innolab_fhir_iac.md) — Todo manual hoy; draft Terraform (azure+fabric roots) + GitHub Actions OIDC en ~/Notes/Innovation Lab IaC deployment draft.md; gaps: HDS accelerator portal-only, Data Agent resource nuevo
