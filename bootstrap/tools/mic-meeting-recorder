@@ -17,6 +17,9 @@ Daemon que:
           resto va a ~/Notes/Projects/<proyecto>/. Si no clasifica, cae a
           ~/Notes/Meetings/ (fallback seguro). Si el proyecto es biocheck o
           huella-interop, además se manda la nota a Discord (DISCORD_WEBHOOK_URL).
+        Si el transcript sale casi vacío o Claude no devuelve una nota
+        estructurada usable, NO se escribe .md: el .transcript.txt junto al
+        audio queda como único registro.
      Grabaciones más cortas se descartan (evita ruido de wake-word, etc.).
 
 Config al inicio del script. Sin dependencias fuera del venv de faster-whisper.
@@ -416,7 +419,12 @@ def notify_discord(note_path: Path, title: str) -> None:
 
 
 def write_outputs(audio_path: Path, duration: float, transcript: str) -> Path | None:
-    """Escribe .transcript.txt + nota .md estructurada por Claude. Devuelve el path de la nota."""
+    """Escribe .transcript.txt + nota .md estructurada por Claude.
+
+    Devuelve el path de la nota, o None si no hay nota que valga la pena
+    guardar en el vault (transcript casi vacío o Claude sin salida usable);
+    el .transcript.txt junto al audio queda de todas formas como registro.
+    """
     slug = audio_path.stem  # 2026-08-27_143012
     transcript_path = audio_path.with_suffix(".transcript.txt")
     transcript_path.write_text(transcript, encoding="utf-8")
@@ -426,26 +434,27 @@ def write_outputs(audio_path: Path, duration: float, transcript: str) -> Path | 
     mm = slug[13:15]
     hora = f"{hh}:{mm}"
     dur_min = duration / 60
-    proyecto = "otro"
 
-    # Si el transcript está vacío o casi vacío, no vale la pena llamar a Claude.
+    # Si el transcript está vacío o casi vacío, no vale la pena llamar a Claude
+    # ni dejar nota: el .transcript.txt ya queda como registro.
     if len(transcript.strip()) < 40:
-        log(f"transcript casi vacío ({len(transcript)} chars), skip Claude")
-        body = f"# Junta {fecha} {hora}\n\n## Contexto\nTranscript sin contenido significativo.\n"
-        title = f"Junta {fecha} {hora}"
-    else:
-        log("llamando a claude para estructurar nota...")
-        t0 = time.time()
-        raw = call_claude(transcript)
-        dt = time.time() - t0
-        log(f"claude respondió en {dt:.1f}s ({len(raw)} chars)")
-        proyecto, body = parse_proyecto(raw) if raw else ("otro", raw)
-        title = extract_title(body)
-        if not body or not title:
-            log("claude falló o sin título — fallback a nota mínima")
-            proyecto = "otro"
-            body = f"# Junta {fecha} {hora}\n\n## Transcripción\n\n{transcript}\n"
-            title = f"Junta {fecha} {hora}"
+        log(f"transcript casi vacío ({len(transcript)} chars), sin nota")
+        return None
+
+    log("llamando a claude para estructurar nota...")
+    t0 = time.time()
+    raw = call_claude(transcript)
+    dt = time.time() - t0
+    log(f"claude respondió en {dt:.1f}s ({len(raw)} chars)")
+    if not raw:
+        log(f"claude falló, sin nota (transcript en {transcript_path})")
+        return None
+
+    proyecto, body = parse_proyecto(raw)
+    title = extract_title(body)
+    if not body or not title:
+        log(f"claude sin título/estructura válida, sin nota (transcript en {transcript_path})")
+        return None
 
     dest_dir, extra_tags = ROUTES.get(proyecto, DEFAULT_ROUTE)
     dest_dir.mkdir(parents=True, exist_ok=True)

@@ -6,11 +6,15 @@ never blocks the next meeting from being recorded.
 
     wav -> whisper-cli -> transcript -> claude -p -> note in ~/Notes/Meetings
 
-The transcript is saved into the vault alongside the note, as Markdown so that
-Obsidian indexes it. Summaries are lossy and this one is generated unattended;
-when something in the note reads wrong, the transcript is what settles it.
+The raw transcript stays local, as plain text under ~/.meeting-recorder/transcripts,
+never in the vault: it is unedited whisper output, not something meant to be read
+on its own. The note's frontmatter points at that local path, so a summary that
+reads wrong can still be checked against the original.
 
-The audio is deleted once both are written. It is by far the largest artefact
+If the write-up fails, no note is written: the transcript and the audio both stay
+on disk so nothing is lost, and the failure is logged.
+
+The audio is deleted once the note is written. It is by far the largest artefact
 and has nothing left to offer at that point.
 """
 
@@ -28,9 +32,6 @@ BASE = HOME / ".meeting-recorder"
 VAULT = HOME / "Notes"
 NOTES = VAULT / "Meetings"
 TRANSCRIPTS = BASE / "transcripts"
-# Same folder as the notes, not a subfolder: a transcript of a meeting is
-# still the meeting. The "(transcript)" suffix is what tells them apart.
-TRANSCRIPTS_VAULT = NOTES
 LOGS = BASE / "logs"
 
 # The multilingual model, not the .en one: these meetings switch between Spanish
@@ -39,7 +40,6 @@ MODEL = HOME / ".whisper-models" / "ggml-small.bin"
 
 NOTES.mkdir(parents=True, exist_ok=True)
 TRANSCRIPTS.mkdir(parents=True, exist_ok=True)
-TRANSCRIPTS_VAULT.mkdir(parents=True, exist_ok=True)
 LOGS.mkdir(parents=True, exist_ok=True)
 
 logging.basicConfig(
@@ -210,29 +210,7 @@ def safe_filename(text: str, limit: int = 60) -> str:
     return (cleaned[:limit].rstrip() or "Untitled")
 
 
-def save_transcript(transcript: str, when: datetime, title: str, app: str, minutes: str) -> Path:
-    """Keep the transcript inside the vault so Obsidian can actually search it.
-
-    As Markdown, not .txt: Obsidian only indexes Markdown, and a transcript that
-    cannot be searched is the half of this that gets used least and matters most
-    when a summary turns out to be wrong.
-    """
-    name = f"{when.strftime('%Y-%m-%d %H-%M')} {safe_filename(title)} (transcript)"
-    path = TRANSCRIPTS_VAULT / f"{name}.md"
-    header = [
-        f"# {name}",
-        "",
-        f"Raw transcript, {app}, {minutes} min. Automatic and imperfect; names in "
-        "particular come out mangled.",
-        "",
-        "---",
-        "",
-    ]
-    path.write_text("\n".join(header) + transcript + "\n")
-    return path
-
-
-def save(note: str, when: datetime, title: str, app: str, minutes: str, transcript_link: str) -> Path:
+def save(note: str, when: datetime, title: str, app: str, minutes: str, transcript_path: Path) -> Path:
     stem = f"{when.strftime('%Y-%m-%d %H-%M')} {safe_filename(title)}"
     path = NOTES / f"{stem}.md"
 
@@ -243,7 +221,7 @@ def save(note: str, when: datetime, title: str, app: str, minutes: str, transcri
         f'time: "{when.strftime("%H:%M")}"',
         f"duration_min: {int(minutes)}",
         f"source: {app}",
-        f'transcript: "[[{transcript_link}]]"',
+        f'transcript: "{transcript_path}"',
         "auto_transcript: true",
         "---",
         "",
@@ -277,23 +255,21 @@ def main() -> int:
         return 1
 
     when = datetime.strptime("_".join(wav.stem.split("_")[0:2]), "%Y-%m-%d_%H-%M")
+    transcript_path = TRANSCRIPTS / f"{wav.stem}.txt"
 
     raw = write_up(transcript)
-    if raw:
-        title, note = split_title(raw)
-    else:
-        # The transcript survived, which is the part that matters. File it under
-        # a name that says the summary is missing rather than losing the meeting.
-        title, note = "Write-up failed", "## Summary\n\nThe write-up failed; see the transcript.\n"
+    if not raw:
+        # The transcript is on disk, which is the part that matters. A note
+        # built from nothing is worse than no note; leave it for a human to
+        # write up from the transcript, or to retry later.
+        log.error("Write-up failed; transcript kept at %s", transcript_path)
+        return 1
 
-    transcript_path = save_transcript(transcript, when, title, app, minutes)
-    # The vault copy is the one that gets read and searched; the working copy
-    # whisper wrote is now a duplicate.
-    (TRANSCRIPTS / f"{wav.stem}.txt").unlink(missing_ok=True)
-    path = save(note, when, title, app, minutes, transcript_path.stem)
+    title, note = split_title(raw)
+    path = save(note, when, title, app, minutes, transcript_path)
     log.info("Wrote %s", path)
 
-    # Only now: the transcript is in the vault and the note is written, so the
+    # Only now: the transcript is on disk and the note is written, so the
     # audio has nothing left to offer and it is by far the largest artefact.
     size_mb = wav.stat().st_size / 1_000_000
     wav.unlink(missing_ok=True)
