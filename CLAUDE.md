@@ -12,7 +12,7 @@ Every impl task. Skip step → STOP, restart from skipped.
 3. **Clarify** — ambiguous? `AskUserQuestion`. No guess.
 4. **Explore** — CBM: `get_architecture` → `search_graph` → `get_code_snippet`. Never grep→read→grep.
 5. **Plan** — non-trivial? `EnterPlanMode`. State approach + files + trade-offs.
-6. **Delegate?** — match MANDATORY criteria (`## Subagents`)? Spawn subagent self-contained prompt. Subagent run §1–10 self. Parallel cap 3. Inline only if 1-file edit / single grep / known path.
+6. **Delegate?** — match MANDATORY criteria (`## Subagents`)? Spawn subagent self-contained prompt. Subagent run §1–10 self. Parallel cap 6. Inline only if 1-file edit / single grep / known path.
 7. **Ripple** — changed symbol → `trace_path` inbound ALL call sites. Update every.
 8. **TDD** — red → min code → green → refactor. Happy+fail+edge.
 9. **Verify** — lint + typecheck + tests PASS. Fail → fix root cause, no skip.
@@ -70,7 +70,7 @@ CBM + context-mode.
 Delegate default. Main = coordinator.
 - **MANDATORY delegate**: online research (tvly/ctx_fetch_and_index), refactor >2 files, summarize >1 file, audit, explore unknown repo, multi-file impact, big log triage.
 - **Skip**: 1-file read, 1-grep, single-known-path edit. Inline.
-- **Parallel cap**: 3 concurrent. Serial if dependent.
+- **Parallel cap**: 6 concurrent. Serial if dependent.
 - **Type**: `general-purpose` (edits), `Plan` (read-only arch), `Explore` (read-only nav).
 - **Prompt**: self-contained, <500 tok. Goal + context + constraint + return format.
 - **Return**: "report <200 words".

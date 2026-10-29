@@ -73,6 +73,25 @@ def process_path(pid: int) -> str:
         return ""
 
 
+def chrome_on_meet() -> bool:
+    """True when a Chrome tab is on Google Meet.
+
+    Chrome holding the mic is not enough on its own: dictation or any site with
+    mic access would count. Asking Chrome for its tab URLs narrows it to Meet.
+    The first call triggers the macOS Automation prompt for Chrome.
+    """
+    try:
+        urls = subprocess.run(
+            ["osascript", "-e", 'tell application "Google Chrome" to get URL of tabs of windows'],
+            capture_output=True,
+            text=True,
+            timeout=5,
+        ).stdout
+    except (subprocess.SubprocessError, OSError):
+        return False
+    return "meet.google.com/" in urls
+
+
 FORCE_FILE = pathlib.Path.home() / ".meeting-recorder" / "FORCE_MEETING"
 
 
@@ -91,6 +110,8 @@ def meeting_app_in_call() -> str | None:
         for needle, name in MEETING_APPS.items():
             if needle in path:
                 return name
+        if "Google Chrome" in path and chrome_on_meet():
+            return "Meet"
     return None
 
 

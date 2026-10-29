@@ -1,7 +1,7 @@
-casos: 470   pasados: 470   fallados: 0
+casos: 473   pasados: 473   fallados: 0
 
 grupo                 total   pasados   fallados
-inactividad               4         4          0
+inactividad               7         7          0
 matriz                  450       450          0
 extra                    16        16          0
 
