@@ -19,3 +19,5 @@ Instalado en la Mac de Alan (Apple Silicon, Homebrew en `/opt/homebrew/bin`):
 NO instalados: `gh`, `code` en PATH (VS Code está en `~/Downloads/Visual Studio Code.app`, abrir con su binario `.../Contents/Resources/app/bin/code -n <dir>`).
 
 Relacionado: [[project-aura-7506-spike]] [[reference-live-audio-capture]]
+
+- 2026-09-29: token OAuth de glab expiró (401 invalid_token) y con él `git fetch/push` HTTPS a gitlab.com (`could not read Username`). El `glab auth login --web` vía prefijo `!` no completa (no interactivo); hay que correrlo en Terminal.app (`export BROWSER="open -a Microsoft\ Edge"` para usar Edge). Git no usaba glab como helper (osxkeychain sin entrada de gitlab.com): fix `git config --global credential.https://gitlab.com.helper '!glab auth git-credential'`. Sin llaves SSH en esta Mac. glab 1.115.0, hay 1.120.0 (`brew upgrade glab`).

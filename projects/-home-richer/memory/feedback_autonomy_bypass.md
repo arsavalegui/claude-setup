@@ -13,3 +13,5 @@ Usuario activó `permissions.defaultMode = "bypassPermissions"` en `~/.claude/se
 - **Sí seguir confirmando destructivos** (rm -rf, `docker compose down -v`, drop SQL, `git push --force`, borrar volúmenes) — regla vieja de `feedback_destructive_confirm.md` sigue vigente.
 - **Sí seguir usando AskUserQuestion para decisiones de diseño** (opciones arquitectónicas, elecciones de librería, etc.) — no es "pedir permiso", es capturar preferencia.
 - Si por algo un permiso técnico salta, decirle al usuario que abra sesión nueva o corra `/permissions` — no re-solicitar.
+
+- 2026-09-24, Alan: "No vuelvas a hacer eso, tienes el bypass y todo pero aunque ya no salga el botón ese de aceptar siempre debemos de revisar todo junto". El bypass quita el prompt de permisos, NO la revisión conjunta: antes de crear ramas, commits, MRs, lanzar agentes que editan, o cualquier cosa que salga de la máquina (GitLab, Azure, mensajes), explico el diagnóstico y el plan y espero su OK. Bypass = sin fricción para leer/verificar/correr diagnósticos, no para decidir por él.

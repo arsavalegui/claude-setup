@@ -34,3 +34,5 @@ recomendación**, no decidir en silencio.
 - **How to apply:** usar `AskUserQuestion` con opciones cuando la
   decisión es genuina; en texto plano listar pros/cons en 1 línea cada
   uno antes de la recomendación.
+
+- 2026-09-24: Volví a irme de largo: abrí un MR en aura-iac y lancé un agente de desarrollo sin explicar primero qué fallaba. Alan: "no hubieras creado nada aún, te fuiste a lo loco, tienes que explicarme primero qué es lo que falla". Regla: ante un reporte de terceros (logs, performance), primero diagnóstico explicado en el chat y propuesta; MRs, ramas o agentes solo con su OK explícito. Aplica aunque el pedido parezca obvio.

@@ -20,3 +20,5 @@ cuerpo del mensaje va limpio. Si el mensaje es largo, mejor separarlo del resto
 de la explicación con un encabezado para que se vea dónde empieza y dónde acaba.
 
 Relacionado: [[user-profile]] [[feedback-test-inventory-excel]]
+
+- 2026-09-29, Alan sobre un borrador con "Two things from you:": "no está bien, siempre se deben pedir bien las cosas". Los borradores a colegas van en tono amable de pedir favor: "would you be able to", "could you help me with", "whenever you get a chance", agradecer al final; nunca listas de exigencias ni imperativos secos, aunque sean cortos. Aplica a todo mensaje a terceros, no solo a Ahmar.
